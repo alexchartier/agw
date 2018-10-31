@@ -66,7 +66,6 @@ def agw_perts(time, x, y, z, kx, ky, mlat, mlon, period, A):
     omega_B = calc_brunt_vaisala_freq(T_0, p)
     Kz = calc_Kz(gamma, omega, omega_B, kx, M, lambda_0, cp, P)
     kzr = np.real(Kz)
-    a_p = ?
 
     # Polarization factors
     P = calc_P(w_p, gamma, gamma_1, P_0, Kz, H, H_dot, k_1, c_2, PSI)
