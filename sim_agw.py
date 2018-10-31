@@ -269,6 +269,7 @@ def get_bkgd_atmosphere(time, z, mlat, mlon):
         except:
             H.append(H[-1])
     H_dot = np.diff(H)
+    p = N * K_B * T_0 / V
 
     return T_0, v_in, H, H_dot, M, rho, m, p
 
