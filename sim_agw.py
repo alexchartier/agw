@@ -16,6 +16,7 @@ Outputs: 3D estimate of:
 
 K_B = 1.3805E-16
 N_A = 6.022E23
+R = K_B * N_A
 g = 981
 i = 1j
 
@@ -36,8 +37,6 @@ def main():
     x = np.linspace(0, 500, 50) * 1E5
     y = np.linspace(0, 500, 50) * 1E5
     z = (np.linspace(80, 500, 50) - 120) * 1E5  # z = 0 at 120km
-
-    
 
     mlat = 10
     mlon = 10
@@ -67,24 +66,30 @@ def agw_perts(time, starttime, x, y, z, k, kx, ky, mlat, mlon, period, A):
     t = (time - starttime).total_seconds()
  
     # Background atmospheric stuff 
-    T_0, v_nx0, v_ny0, v_in, H, H_dot, rho_0, rho_i, m, p, I = \
+    T_0, v_nx0, v_ny0, v_in, H, H_dot, rho_0, rho_i, m, p, I, alts = \
         get_bkgd_atmosphere(time, z, mlat, mlon)
     cp, cv, gamma, gamma_1 = get_specific_heat_ratios(T_0)
     lambda_0 = get_thermal_cond_coeffs(T_0)
     A_p = A * np.exp(i * (omega * t - kx * x - ky * y))  # GW equation
 
     # Various intermediate quantities
-    v, omega_p, PSI, k_1, c_1, c_2 = clark_consts(
+    v, omega_p, PSI, k1, c1, c2, c3 = clark_consts(
         lambda_0, T_0, H, omega, k, kx, ky,
         v_nx0, v_ny0, v_in, rho_0, rho_i, I, gamma_1, m)
     omega_B = calc_brunt_vaisala_freq(z, gamma, H, T_0)
-    Kz = calc_Kz(gamma, omega, omega_B, kx, m, p, T_0, lambda_0, cp)
+    Kz = calc_Kz_clark(PSI, c1, c2, c3, H, H_dot, k1, omega_p, gamma_1)
+
+    """ 
+    plt.plot(np.imag(Kz) * 1E-6, alts)
+    plt.show()
+    pdb.set_trace() 
+    """ 
     kzr = np.real(Kz)
 
     # Polarization factors
-    P = calc_P(omega_p, gamma, gamma_1, p, Kz, H, H_dot, k_1, c_2, PSI)
+    P = calc_P(omega_p, gamma, gamma_1, p, Kz, H, H_dot, k1, c2, PSI)
     V = calc_V(omega_p, v_in, ky, g, H, P)
-    W = calc_W(omega_p, gamma, p, c_1, g, H, c_2, PSI, Kz)
+    W = calc_W(omega_p, gamma, p, c1, g, H, c2, PSI, Kz)
     U = calc_U(omega_p, v_in, I, kx, g, H, P, W)
 
     # velocity, density and pressure perturbations
@@ -98,12 +103,13 @@ def agw_perts(time, starttime, x, y, z, k, kx, ky, mlat, mlon, period, A):
 def calc_brunt_vaisala_freq(z, gamma, H, T_0):
     # From Matsumara et al. [2011]
     omega_B = np.sqrt((gamma - 1) * g / (gamma * H) + g / T_0 * np.gradient(T_0, z))
+    omega_B /= (2 * np.pi)
     """
     alts = z/1E5 + 80
     plt.plot(1 / (omega_B * 60), alts)
     plt.show()
     pdb.set_trace()
-    """ 
+    """
     return omega_B
     
     
@@ -147,20 +153,20 @@ def calc_V(omega_p, v_ni, ky, g, H, P):
     return V
 
 
-def calc_W(omega_p, gamma, p_0, c_1, g, H, c_2, PSI, Kz):
+def calc_W(omega_p, gamma, p_0, c1, g, H, c2, PSI, Kz):
     """
     Clark (p25)
     W: polarization factor
     """
     W = omega_p ** 2 * (gamma - 1) / np.sqrt(p_0) * \
-        (c_1 * g * H * (c_2 + PSI * (Kz ** 2 +  1/ (4 * H ** 2))) - omega_p)
+        (c1 * g * H * (c2 + PSI * (Kz ** 2 +  1/ (4 * H ** 2))) - omega_p)
     return W
 
 
-def calc_P(omega_p, gamma, gamma_1, P_0, Kz, H, H_dot, k_1, c_2, PSI):
+def calc_P(omega_p, gamma, gamma_1, P_0, Kz, H, H_dot, k1, c2, PSI):
     # From Clark, P25
     P = omega_p ** 2 * (gamma - 1) / np.sqrt(P_0) * (\
-        (Kz - i / (2 * H) - i * k_1) * (c_2 + PSI * (Kz ** 2 + 1 / (4 * H ** 2))) +\
+        (Kz - i / (2 * H) - i * k1) * (c2 + PSI * (Kz ** 2 + 1 / (4 * H ** 2))) +\
         i * (1 + gamma_1 * H_dot) / H)
     return P
 
@@ -170,16 +176,30 @@ def calc_R(P, T):
     return R
 
 
-def calc_T(omega_p, gamma, P_0, c_1, g, gamma_1, H_dot, Kz, H, K_1):
-    T = omega_p * (gamma - 1) / np.sqrt(P_0) * (i * c_1 * g * (1 + gamma_1 * H_dot) + \
-        omega_p * (Kz - i / (2 * H) - i * K_1))
+def calc_T(omega_p, gamma, P_0, c1, g, gamma_1, H_dot, Kz, H, K_1):
+    T = omega_p * (gamma - 1) / np.sqrt(P_0) * (i * c1 * g * \
+        (1 + gamma_1 * H_dot) + omega_p * (Kz - i / (2 * H) - i * K_1))
     return T
 
+def calc_Kz_clark(PSI, c1, c2, c3, H, H_dot, k1, omega_p, gamma_1):
+    """
+    Kz following Clark (p. 24-25)
+    """
+    d1 = c2 / PSI + 1 / (2 * H ** 2) + k1 ** 2 - c1 * c3 
+    d2 = 1 / (4 * H ** 2) * (1 / (4 * H ** 2) - k1 ** 2 - c1 * c3) + \
+        1 / PSI * (c2 / (4 * H ** 2) - c1 * c2 * c3 - c2 * k1 ** 2 - 1 / H ** 2\
+        + omega_p * c3 / (g * H) + c1 * g / (omega_p * H) + \
+        gamma_1 * H_dot / H * (-1 / (2 * H) + k1 + c1 * g / omega_p))
 
-def calc_Kz(gamma, omega, omega_B, kx, M, P_0, T, lambda_0, cp, R=8.3144598E7):
+    Kz = (- d1 / 2 - (d1 ** 2 / 2 - 4 * d2) ** (1 / 2)) ** (1 / 2)
+
+    return Kz
+
+
+def calc_Kz_volland(gamma, omega, omega_B, kx, M, P_0, T, lambda_0, cp, alts, ):
     """
      From Volland (1969)
-     C Acoustic phase velocity
+     C: Acoustic phase velocity
      gamma: ratio of specific heats
      R: Ideal gas constant
      M: molecular weight
@@ -202,7 +222,41 @@ def calc_Kz(gamma, omega, omega_B, kx, M, P_0, T, lambda_0, cp, R=8.3144598E7):
     Kz = (gamma / 2 - A ** 2 - S ** 2 - i * G \
         - ((gamma / 2 - i * G) ** 2 + 2 * i * G * (1 + B ** 2 * S ** 2)) ** (1 / 2)
         ) ** (1 / 2)
+
+    plot_Kz_quantities(alts, C, V, omega, omega_a, omega_h, omega_B)
+
     return Kz
+
+def plot_Kz_quantities(alts, C, V, omega, omega_a, omega_h, omega_B):
+    nplts = 3
+    fig = plt.figure()
+    # C
+    ax = fig.add_subplot(1, nplts, 1)
+    ax.set_xscale('log')
+    ax.plot(C, alts, label='C term')
+    ax.legend()
+    ax.grid()
+    ax.set_ylabel(r'Alt. $(km)$')
+
+    # V
+    ax = fig.add_subplot(1, nplts, 2)
+    ax.set_xscale('log')
+    ax.plot(V, alts, label='V term')
+    ax.legend()
+    ax.grid()
+    ax.set_ylabel(r'Alt. $(km)$')
+
+    # omega
+    ax = fig.add_subplot(1, nplts, 3)
+    ax.set_xscale('log')
+    ax.plot(omega_a, alts, label='omega_a')
+    ax.plot(omega_h, alts, label='omega_H')
+    ax.plot(omega_B, alts, label='omega_B')
+    ax.legend()
+    ax.grid()
+    ax.set_xlabel(r'frequency (Hz)')
+
+    plt.show()
 
 
 def clark_consts(lambda_0, T_0, H, omega, k, kx, ky, v_nx0, v_ny0, v_in, \
@@ -224,11 +278,12 @@ def clark_consts(lambda_0, T_0, H, omega, k, kx, ky, v_nx0, v_ny0, v_in, \
     v = v_in * rho_i / rho_0
     omega_p = omega - kx * v_nx0 - ky * v_ny0
     PSI = lambda_0 * T_0 / (i * omega_p * P_0)
-    k_1 = kx * v * np.cos(I) * np.sin(I) / (omega_p - i * v * np.sin(I) ** 2)
-    c_1 = omega_p / (g * H) - kx ** 2 / (omega_p - i * v * np.sin(I) ** 2) - \
+    k1 = kx * v * np.cos(I) * np.sin(I) / (omega_p - i * v * np.sin(I) ** 2)
+    c1 = omega_p / (g * H) - kx ** 2 / (omega_p - i * v * np.sin(I) ** 2) - \
          ky ** 2 / (omega_p - i * v)
-    c_2 = gamma_1 * k ** 2 * PSI
-    return v, omega_p, PSI, k_1, c_1, c_2
+    c2 = gamma_1 * k ** 2 * PSI
+    c3 = omega_p * (omega_p - i * v) / (omega_p - i * v * np.sin(I) ** 2)
+    return v, omega_p, PSI, k1, c1, c2, c3
 
 
 def get_specific_heat_ratios(T_0=500):
@@ -341,7 +396,7 @@ def get_bkgd_atmosphere(time, z, lat, lon):
     v_in = get_v_in(N, N_i, m) 
     # plot_neutral_atmos(alts, N, N_i, rho_0, rho_i, H, H_dot, p, v_in, v_nx, v_ny)
 
-    return T_0, v_nx, v_ny, v_in, H, H_dot, rho_0, rho_i, m, p, I
+    return T_0, v_nx, v_ny, v_in, H, H_dot, rho_0, rho_i, m, p, I, alts
 
 
 def get_v_in(N, N_i, m):
