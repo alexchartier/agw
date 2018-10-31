@@ -2,6 +2,8 @@ import numpy as np
 import pdb 
 from pyglow import pyglow
 import datetime as dt
+import matplotlib.pyplot as plt
+import scipy.interpolate
 
 """
 AGW/TID simulation based on Kirchengast (1996) and Clark (1970)
@@ -12,7 +14,10 @@ Outputs: 3D estimate of:
             2. ion velocity, temperature (i and e) and density perturbations
 """
 
-K_B = 0.13805E-5
+K_B = 1.3805E-16
+N_A = 6.022E23
+g = 981
+i = 1j
 
 # Define dimensions (in km)
 x = np.linspace(-10000, 10000, 1)
@@ -23,6 +28,7 @@ z = np.linspace(50, 300, 1)
 # TODO(ATC): Check whether x, y, z are defined reasonably
 # TODO(ATC): Check whether kx, ky, kz are calculated or defined
 
+
 def main():
     time = dt.datetime(2010, 1, 1)
 
@@ -31,19 +37,25 @@ def main():
     y = np.linspace(0, 500, 50) * 1E5
     z = (np.linspace(80, 500, 50) - 120) * 1E5  # z = 0 at 120km
 
-    # Horizontal wavenumbers in cm^-1 
-    kx = 1E-8
-    ky = 1E-8
+    
 
     mlat = 10
     mlon = 10
     period = 60    # Period of wave (minutes)
 
-    phi_H = 180    # propagation direction (N = 0, S = 180)
+    phi_H = 45    # propagation direction (N = 0, S = 180)
     A = 5  # magnitude of wind disturbance at the bottom (m/s)
-    
 
-def agw_perts(time, x, y, z, kx, ky, mlat, mlon, period, A):
+    # Horizontal wavenumbers in cm^-1 
+    k = 1E-8
+    kx = np.abs(1 / (np.cos(np.deg2rad(phi_H)) * (1 / k)))
+    ky = np.abs(1 / (np.sin(np.deg2rad(phi_H)) * (1 / k)))
+
+    v_n1, p_n1, rho_n1 = agw_perts(time, time, x, y, z, k, kx, ky, \
+        mlat, mlon, period, A) 
+
+
+def agw_perts(time, starttime, x, y, z, k, kx, ky, mlat, mlon, period, A):
     """
     period: GW period in minutes
     Polarization relations: U, V, W, P, R
@@ -52,94 +64,132 @@ def agw_perts(time, x, y, z, kx, ky, mlat, mlon, period, A):
     v defined in x, y, z coordinates (meridional, zonal, vertical)
     """
     omega = 1 / (period * 60)
+    t = (time - starttime).total_seconds()
  
     # Background atmospheric stuff 
-    T_0, v_in, H, H_dot, M, rho, m, p = get_bkgd_atmosphere(time, z, mlat, mlon)
+    T_0, v_nx0, v_ny0, v_in, H, H_dot, rho_0, rho_i, m, p, I = \
+        get_bkgd_atmosphere(time, z, mlat, mlon)
     cp, cv, gamma, gamma_1 = get_specific_heat_ratios(T_0)
-    A_p = A * np.exp(i * (omega * t - kx * x - ky * y))  # GW equation
     lambda_0 = get_thermal_cond_coeffs(T_0)
+    A_p = A * np.exp(i * (omega * t - kx * x - ky * y))  # GW equation
 
     # Various intermediate quantities
-    v, w_p, PSI, k_1, c_2 = clark_consts(lambda_0, T_0, omega, kx, ky, \
-        v_nx0, v_ny0, v_in, rho_0, rho_i, rho_n, I, gamma_1, m)
-    H, H_dot = get_scale_height(time)  # or from Clark's equation
-    omega_B = calc_brunt_vaisala_freq(T_0, p)
-    Kz = calc_Kz(gamma, omega, omega_B, kx, M, lambda_0, cp, P)
+    v, omega_p, PSI, k_1, c_1, c_2 = clark_consts(
+        lambda_0, T_0, H, omega, k, kx, ky,
+        v_nx0, v_ny0, v_in, rho_0, rho_i, I, gamma_1, m)
+    omega_B = calc_brunt_vaisala_freq(z, gamma, H, T_0)
+    Kz = calc_Kz(gamma, omega, omega_B, kx, m, p, T_0, lambda_0, cp)
     kzr = np.real(Kz)
 
     # Polarization factors
-    P = calc_P(w_p, gamma, gamma_1, P_0, Kz, H, H_dot, k_1, c_2, PSI)
-    V = calc_V(w_p, v_in, ky, g, H, P)
-    W = calc_W(a_p, kzr, z)
-    U = calc_U(w_p, v_in, I, kx, g, H, P, W)
+    P = calc_P(omega_p, gamma, gamma_1, p, Kz, H, H_dot, k_1, c_2, PSI)
+    V = calc_V(omega_p, v_in, ky, g, H, P)
+    W = calc_W(omega_p, gamma, p, c_1, g, H, c_2, PSI, Kz)
+    U = calc_U(omega_p, v_in, I, kx, g, H, P, W)
 
     # velocity, density and pressure perturbations
-    v_n1 = [U(z), V(z), W(z)] * A_p
-    p_n1 = P(z) * A_p
-    rho_n1 = R(z) * A_p
+    v_n1 = [U, V, W] * A_p
+    p_n1 = P * A_p
+    rho_n1 = R * A_p
 
     return v_n1, p_n1, rho_n1
              
 
-def calc_brunt_vaisala_freq(T_0, p, p_ref=1E6, R_over_cp=0.286, g=980):
-    # From Wikipedia
-    # p, p_ref are pressure in dynes/cm2
-    # T_0 in K
-    # R/cp given by wikipedia
-    # g: gravity in cm/s^2
-    
-    THETA = T_0 * (p_ref / p_0) ** R_over_cp
-    omega_B = np.sqrt(g / THETA * THETA_dot)
+def calc_brunt_vaisala_freq(z, gamma, H, T_0):
+    # From Matsumara et al. [2011]
+    omega_B = np.sqrt((gamma - 1) * g / (gamma * H) + g / T_0 * np.gradient(T_0, z))
+    """
+    alts = z/1E5 + 80
+    plt.plot(1 / (omega_B * 60), alts)
+    plt.show()
+    pdb.set_trace()
+    """ 
     return omega_B
     
     
-def get_thermal_cond_coeffs(T_0, A_p, T):
+def get_thermal_cond_coeffs(T_0):
     # NOTE: from dynamics of atmospheric reentry p. 37 (Regan)
-    lambda_0 = 2.64638E-3 * T ** (3 / 2) / (T + 245.4 * 10 ** (-12 / T)) / 100
     # 100 factor converts from J / s.m.K to J / s.cm.K
-
+    lambda_0 = 2.64638E-3 * T_0 ** (3 / 2) / (T_0 + 245.4 * 10 ** (-12 / T_0)) / 100
+    return lambda_0
     
-def calc_U(w_p, v_ni, I, kx, g, H, P, W):
-    U = 1 / (w_p - i * v_ni * np.sin(I) ** 2) * \
+    
+def calc_U(omega_p, v_ni, I, kx, g, H, P, W):
+    """
+    Kirchengast (A5)
+    omega_p: related to GW frequency (omega_p = w - kx * v_nxo - ky * v_nyo)
+    v_ni: ion-neutral collision frequency
+    I: magnetic field inclination
+    kx: x-component of wavenumber
+    g: gravity
+    H: scale height
+    P: polarization factor
+    W: polarization factor
+    U: polarization factor
+    """
+    U = 1 / (omega_p - i * v_ni * np.sin(I) ** 2) * \
             (kx * g * H * P - i * v_ni * np.cos(I) * np.sin(I) * W)
     return U
 
 
-def calc_V(w_p, v_ni, ky, g, H, P):
-    V = 1 / (w_p - i * v_ni) * ky * g * H * P)
+def calc_V(omega_p, v_ni, ky, g, H, P):
+    """
+    Kirchengast (A1)
+    omega_p: 
+    v_ni: ion-neutral collision frequency
+    ky: y-component of wavenumber
+    g: gravity
+    H: scale height
+    P: Polarization factor
+    V: another polarization factor
+    """
+    V = 1 / (omega_p - i * v_ni) * (ky * g * H * P)
     return V
 
 
-def calc_W(a_p, kzr, z):
+def calc_W(omega_p, gamma, p_0, c_1, g, H, c_2, PSI, Kz):
     """
-    a_p: weakly height-dependent factor
-    kzr: real component of Kz
+    Clark (p25)
+    W: polarization factor
     """
-    W = a_p * np.exp(-i * kzr * z)
+    W = omega_p ** 2 * (gamma - 1) / np.sqrt(p_0) * \
+        (c_1 * g * H * (c_2 + PSI * (Kz ** 2 +  1/ (4 * H ** 2))) - omega_p)
     return W
 
 
-def calc_P(w_p, gamma, gamma_1, P_0, Kz, H, H_dot, k_1, c_2, PSI):
+def calc_P(omega_p, gamma, gamma_1, P_0, Kz, H, H_dot, k_1, c_2, PSI):
     # From Clark, P25
-    P = w_p ** 2 * (gamma - 1) / np.sqrt(P_0) * (\
+    P = omega_p ** 2 * (gamma - 1) / np.sqrt(P_0) * (\
         (Kz - i / (2 * H) - i * k_1) * (c_2 + PSI * (Kz ** 2 + 1 / (4 * H ** 2))) +\
         i * (1 + gamma_1 * H_dot) / H)
     return P
 
 
-def calc_R(P, T)
+def calc_R(P, T):
     R = P - T
     return R
 
 
-def calc_T(w_p, gamma, P_0, c_1, g, gamma_1, H_dot, Kz, H, K_1):
-    T = w_p * (gamma - 1) / np.sqrt(P_0) * (i * c_1 * g * (1 + gamma_1 * H_dot) + \
-        w_p * (Kz - i / (2 * H) - i * K_1))
+def calc_T(omega_p, gamma, P_0, c_1, g, gamma_1, H_dot, Kz, H, K_1):
+    T = omega_p * (gamma - 1) / np.sqrt(P_0) * (i * c_1 * g * (1 + gamma_1 * H_dot) + \
+        omega_p * (Kz - i / (2 * H) - i * K_1))
     return T
 
 
 def calc_Kz(gamma, omega, omega_B, kx, M, P_0, T, lambda_0, cp, R=8.3144598E7):
-    # From Volland (1969)
+    """
+     From Volland (1969)
+     C Acoustic phase velocity
+     gamma: ratio of specific heats
+     R: Ideal gas constant
+     M: molecular weight
+     T: Neutral temperature
+     V: heat conduction velocity
+     lambda_0: coefficient of heat conductivity
+     cp: Specific heat capacity
+     P_0: pressure
+    
+    """
     C = (gamma * (R / M) * T) ** (1 / 2)
     V = lambda_0 * g / (cp * P_0)
     omega_a = gamma * g / (2 * C)
@@ -148,19 +198,15 @@ def calc_Kz(gamma, omega, omega_B, kx, M, P_0, T, lambda_0, cp, R=8.3144598E7):
     S = kx / k 
     A = omega_a / omega
     G = omega_h / omega 
-    B = 2 * ((gamma - 1) ** (1 / 2) / gamma
+    B = 2 * (gamma - 1) ** (1 / 2) / gamma 
     Kz = (gamma / 2 - A ** 2 - S ** 2 - i * G \
         - ((gamma / 2 - i * G) ** 2 + 2 * i * G * (1 + B ** 2 * S ** 2)) ** (1 / 2)
         ) ** (1 / 2)
     return Kz
 
 
-def calc_a_p(?):
-    # Weakly dependent function of something in height
-
-
-def clark_consts(lambda_0, T_0, omega, kx, ky, v_nx0, v_ny0, v_in, \
-        rho_0, rho_i, rho_n, I, gamma_1, m):
+def clark_consts(lambda_0, T_0, H, omega, k, kx, ky, v_nx0, v_ny0, v_in, \
+        rho_0, rho_i, I, gamma_1, m):
     """ 
          Clark, P23
     lambda_0: Unperturbed thermal conductivity coefficient
@@ -169,23 +215,20 @@ def clark_consts(lambda_0, T_0, omega, kx, ky, v_nx0, v_ny0, v_in, \
     kx, ky: GW wavenumbers in the x- and y-dirs (NOTE: y points mag. WEST)
     v_nxo, v_nyo: neutral winds in the x and y dirs at the base
     v_in: ion-neutral coll. freq.
-    rho_i, rho_n: ion and neutral densities
+    rho_0, rho_i: ion and neutral densities
     I: dip angle (+ve up)
     gamma_1: related to ratio of specific heats
     PSI: 
     """ 
     P_0 = rho_0 * K_B * T_0 / m
-    v = v_in * rho_i / rho_n
+    v = v_in * rho_i / rho_0
     omega_p = omega - kx * v_nx0 - ky * v_ny0
     PSI = lambda_0 * T_0 / (i * omega_p * P_0)
     k_1 = kx * v * np.cos(I) * np.sin(I) / (omega_p - i * v * np.sin(I) ** 2)
+    c_1 = omega_p / (g * H) - kx ** 2 / (omega_p - i * v * np.sin(I) ** 2) - \
+         ky ** 2 / (omega_p - i * v)
     c_2 = gamma_1 * k ** 2 * PSI
-    return v, w_p, PSI, k_1, c_2
-
-
-def get_scale_height(time):
-    # Calculate the neutral scale height and its derivative from MSIS or similar
-    return H, H_dot
+    return v, omega_p, PSI, k_1, c_1, c_2
 
 
 def get_specific_heat_ratios(T_0=500):
@@ -216,24 +259,23 @@ def get_specific_heat_ratios(T_0=500):
 
     cp, cv, gamma, gamma_1 = [], [], [], []
     for T in T_0:
-        idx = (np.abs(gamma_table[:, 0] - T)).argmin()
+        idx = (np.abs(spec_heat_table[:, 0] - T)).argmin()
         cp.append(spec_heat_table[idx, 1])
         cv.append(spec_heat_table[idx, 2])
         gamma.append(spec_heat_table[idx, 3])
-        pdb.set_trace() # Check this works - gamma should be 1.387
-        gamma_1.append(gamma / (gamma - 1))
-    return cp, cv, gamma, gamma_1
+    gamma = np.array(gamma)
+    gamma_1 = gamma / (gamma - 1)
+    return np.array(cp), np.array(cv), gamma, gamma_1
 
 
-def get_bkgd_atmosphere(time, z, mlat, mlon):
+def get_bkgd_atmosphere(time, z, lat, lon):
     """
     T_0: neutral temperature
     v_in: ion-neutral collision frequency
     H: scale height
     H_dot: derivative of scale height
-    M: mass mixing ratio?
     rho: neutral density
-    m: mass?
+    m: average molar mass
     p: pressure
     """
     neutrals = {
@@ -245,34 +287,125 @@ def get_bkgd_atmosphere(time, z, mlat, mlon):
         'O2': 32,
         'HE': 4,
     }                
-
+    ions = {
+        'H+': 1,
+        'O+': 16,
+        'NO+': 30,
+        'O2+': 32,
+        'HE+': 4,
+    }
+        
     alts = z / 1E5 + 120
 
     # Get basic quantities out of MSIS
-    T_0, rho, M, p, N = [], [], [], [], []  # N: number density
+    T_0, rho_0, rho_i, m, p, N, N_i, v_nx, v_ny = \
+        [], [], [], [], [], [], [], [], []  # N: number density
 
     for alt in alts:
-        pt = pyglow.Point(time, alt, mlat, mlon)
+        pt = pyglow.Point(time, lat, lon, alt)
         pt.run_msis()
+        pt.run_iri()
+        pt.run_hwm14()
+        v_nx.append(pt.u * 1E2)
+        v_ny.append(pt.v * 1E2)
         T_0.append(pt.Tn_msis)
-        rho.append(pt.rho)
-        M.append(sum([pt.nn[k] * v for k, v in neutrals.items()]) / pt.rho)  # Molar mass
-        N.append(sum([v for v in neutrals.keys()]))  # number density
+        rho_0.append(pt.rho * 1E3)  # kg/m3 -> g / cm3
+        rho_i.append(sum([pt.ni[k] / 1E6 * v for k, v in ions.items()]) / N_A)
+        nnd = sum(pt.nn.values())
+        nid = sum(pt.ni.values())
+        # Molar mass
+        m.append(sum([pt.nn[k] * v for k, v in neutrals.items()]) / nnd)
+        N.append(nnd)  # number density
+        N_i.append(nid)  # number density
 
+    # Convert to np arrays
+    T_0 = np.array(T_0)
+    v_nx = np.array(v_nx)
+    v_ny = np.array(v_ny)
+    rho_0 = np.array(rho_0)
+    rho_i = np.array(rho_i)
+    m = np.array(m)
+    N = np.array(N)
+    N_i = np.array(N_i) / 1E6
+    
     # Calculate scale height
-    H = []
-    for alt in alts:
-        rho_i = rho[alts == alt] / np.e
-        try:
-            H.append(np.interp(rho, alts, rho_i) - alt)
-        except:
-            H.append(H[-1])
-    H_dot = np.diff(H)
-    p = N * K_B * T_0 / V
+    H = K_B * T_0 * N_A / (m * g)
+    H_dot = np.gradient(H, z)
 
-    return T_0, v_in, H, H_dot, M, rho, m, p
+    # Magnetic inclination
+    pt.run_igrf()
+    I = np.deg2rad(pt.dip)
+
+    # pressure
+    p = N * K_B * T_0
+    v_in = get_v_in(N, N_i, m) 
+    # plot_neutral_atmos(alts, N, N_i, rho_0, rho_i, H, H_dot, p, v_in, v_nx, v_ny)
+
+    return T_0, v_nx, v_ny, v_in, H, H_dot, rho_0, rho_i, m, p, I
 
 
-def get_v_in(time):
+def get_v_in(N, N_i, m):
     # Calculate the ion-neutral coll. freq
-    return v_in
+    return 2.6E-9 * (N + N_i) * m ** (-1 / 2)
+
+
+def plot_neutral_atmos(alts, N, N_i, rho_0, rho_i, H, H_dot, \
+        p, v_in, v_nx, v_ny):
+    nplts = 6
+    fig = plt.figure()
+    # neutral and charged number density
+    ax = fig.add_subplot(1, nplts, 1)
+    ax.set_xscale('log')
+    ax.plot(N, alts, label='neutral')
+    ax.plot(N_i, alts, label='ion')
+    ax.legend()
+    ax.grid()
+    ax.set_xlabel(r'number density $(cm^{-3})$')
+    ax.set_ylabel(r'Alt. $(km)$')
+
+    # neutral and charged mass density
+    ax = fig.add_subplot(1, nplts, 2)
+    ax.set_xscale('log')
+    ax.plot(rho_0, alts, label='neutral')
+    ax.plot(rho_i, alts, label='ion')
+    ax.legend()
+    ax.grid()
+    ax.set_xlabel(r'Mass density $(g/cm^3)$')
+
+    # neutral scale height
+    ax = fig.add_subplot(1, nplts, 3)
+    ax.plot(H / 1E5, alts, label='neutral scale height')
+    ax.plot(H_dot / 1E4, alts, label='H_dot x 10')
+    ax.legend()
+    ax.grid()
+    ax.set_xlabel(r'Scale height $(km)$')
+
+    # Atmospheric pressure
+    ax = fig.add_subplot(1, nplts, 4)
+    ax.set_xscale('log')
+    ax.plot(p, alts, label='neutral pressure')
+    ax.legend()
+    ax.grid()
+    ax.set_xlabel(r'pressure $(dynes/cm^2)$')
+
+    # Atmospheric pressure
+    ax = fig.add_subplot(1, nplts, 5)
+    ax.set_xscale('log')
+    ax.plot(v_in, alts, label='ion-neutral coll. freq.')
+    ax.legend()
+    ax.grid()
+    ax.set_xlabel(r'collisions per second')
+
+    # Wind speed
+    ax = fig.add_subplot(1, nplts, 6)
+    ax.plot(v_nx, alts, label='meridional')
+    ax.plot(v_ny, alts, label='zonal')
+    ax.legend()
+    ax.grid()
+    ax.set_xlabel(r'wind speed (cm/s)')
+
+    plt.show()
+
+
+if __name__ == '__main__':
+    main()
