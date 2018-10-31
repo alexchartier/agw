@@ -225,6 +225,54 @@ def get_specific_heat_ratios(T_0=500):
     return cp, cv, gamma, gamma_1
 
 
+def get_bkgd_atmosphere(time, z, mlat, mlon):
+    """
+    T_0: neutral temperature
+    v_in: ion-neutral collision frequency
+    H: scale height
+    H_dot: derivative of scale height
+    M: mass mixing ratio?
+    rho: neutral density
+    m: mass?
+    p: pressure
+    """
+    neutrals = {
+        'H': 1,
+        'O': 16,
+        'N': 14,
+        'AR': 40,
+        'N2': 28,
+        'O2': 32,
+        'HE': 4,
+    }                
+
+    alts = z / 1E5 + 120
+
+    # Get basic quantities out of MSIS
+    T_0, rho, M, p, N = [], [], [], [], []  # N: number density
+
+    for alt in alts:
+        pt = pyglow.Point(time, alt, mlat, mlon)
+        pt.run_msis()
+        T_0.append(pt.Tn_msis)
+        rho.append(pt.rho)
+        M.append(sum([pt.nn[k] * v for k, v in neutrals.items()]) / pt.rho)  # Molar mass
+        N.append(sum([v for v in neutrals.keys()]))  # number density
+
+    # Calculate scale height
+    H = []
+    for alt in alts:
+        rho_i = rho[alts == alt] / np.e
+        try:
+            H.append(np.interp(rho, alts, rho_i) - alt)
+        except:
+            H.append(H[-1])
+    H_dot = np.diff(H)
+    p = N * K_B * T_0 / V
+
+    return T_0, v_in, H, H_dot, M, rho, m, p
+
+
 def get_v_in(time):
     # Calculate the ion-neutral coll. freq
     return v_in
