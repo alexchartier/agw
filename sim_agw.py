@@ -32,7 +32,178 @@ z = np.linspace(50, 300, 1)
 # TODO(ATC): Check whether kx, ky, kz are calculated or defined
 
 
+
+# "DATA"
+H = i
+COI = 0.84992E-9
+RAD = 57.296
+GAMMA = 1.4
+BC = 1.3805E-16
+
+
 def main():
+    # Punchcard inputs
+    HNSTEP = 2.0  # height step (km)
+    DELTME = 0.5  # time increment (hours)
+    QP0 = 100     # F10.7
+    BETA0 =   # magnitude of loss coefficient at 120 km
+    ALPHA =   # recombination coefficient in cm^-3 sec^-1
+    # FLUX =    # parameter used in computing GAMMA_infinity (ionization flux at top of atmosphere)
+    # CONTV = # another parameter used in computing GAMMA_infinity (ionization flux at top of atmosphere)
+    HL = 700. # upper boundary (km)
+    DIP = -70.  # mag. dip angle (degrees)
+    DECL = 0.  # Solar declination (degrees)
+    RLAT = 40.  # observer's latitude (degrees +N)
+    Y = 0.  # dist. from observer (km? +W)
+    TXMAX = 1500  # exospheric max. temp (K)
+    TXMIN = 1000  # exospheric min. temp (K)
+    T120 = 355 # temp at 120 km (K)
+    TEEMAX = 2500  # exospheric electron TMAX (K)
+    TEEMIN = 1000  # exospheric electron TMIN (K)
+    AMPLO = 2E8 # GW amplitude (dyne^(1/2) sec^2)
+    THERMC = 324. # thermal conductivity coefficient * 9/5 to allow for "viscous effects"  (dyne cm^2 / sec. K)
+    WVN = 0.02  # Horizontal wavenumber (km^-1)
+    PERIOD = 20 # GW period (min)
+    PHI = 90  # azimuth (degrees)
+    TINT = 12.  # Time of start of GW in hours (must be > 12 or the last TERM read, and even multiple of DELTME)
+    TERM = 24.  # Time of GW termination in hours (> TINT and even multiple of DELTME)
+    # Program stops when TERM > 98.0 
+   
+
+def zprofl(II):
+    CHI = np.arccos(np.sin(RLATR) * np.sin(DECLR) + np.cos(RLATR) * np.cos(DECLR) * np.cos((TIME - 112.) * 15 ./ 57.296))
+    TCOSC = (np.cos((CHI - .7854 + 0.20944 * np.sin(CHI + 0.7854)) * 0.5)) ** 2.5
+    TEMPEX = TXMIN + (TXMAX - TXMIN) * TCOSC
+    TEEX = TEEMIN + (TEEMAX - TEEMIN) * TCOSC
+    TEX800 = (TEMPEX - 800.) ** 2
+    SSS = 0.0291 * np.exp(-.5 * TEX800 / ((750. + (1.722E-4) * TEX800) ** 2))
+    TEMSUB = TEMPEX - T120
+    if II == 1:
+        X[0] = 0.
+        XSTEP = HNSTEP * COSI / (SINI * HCON)
+        CHZ = np.arccos(np.sin(RLATR) * np.sin(DECLR) + np.cos(RLATR) * np.cos(DECLR) * np.cos((19.112) * 15. / 57.296))
+        TCOSZ = (np.cos((CHZ - 0.7854 + .20944 * np.sin(CHZ + 0.7854)) * .5)) ** 2.5
+        TCEAC = TCOSC - TCOSZ
+        PHOFLU = 6.8E8 * QPO
+        ALT[0] = 120.
+        GC[0] = 980.665 / ((1. + 120. / 6356.77) ** 2)
+    GCNT = 0.
+    JJ = J + 1
+    for K in np.arange(0, 273):
+        ALTEP = ALT[k]
+         
+
+
+def facalg(AMPL, ):
+    """
+    See page 110 of Clark thesis - calculates Kz
+    # Translation from the outside world
+    PSI: THERMK
+    lambda_0: THERMC
+
+    """    # pythonized version of Fortran
+    if AMPL < 0:
+        AMPL = AMPL0
+        G1 = GAMMA - 1.
+        G2 = GAMMA / G1
+        #IS = 0
+        WVN = WVN * HCON  
+        HNSCM = HNSTEP / HCON
+        DELTIM = PERIOD / 1200.
+        SINISQ = SINI ** 2
+        CSINI = COSI * SINI
+        WVNSQ = WVN ** 2
+        PHI = PHI / RAD
+        WVNX = WVN * np.cos(PHI)
+        WVNXSQ = WVNX ** 2
+        WVNY = WVN * sin(PHI)
+        WVNYSQ = WVNSQ - WVNXSQ
+        FREQ = .104718 / PERIOD  # 2 pi factor 
+    AMLPHF = 0.
+    #IS += 1 
+    #JJ = J + 1
+    #DO 3 K = 1, JJ 
+    G = GC[K]
+    HKK = HK[K] / HCON
+    GHK = G * HKK
+    DENK = DEN[K]
+    TK = TEMP[K]
+    HK12 = 0.5 / HKK
+    FKSQ = 1 ./ (HKK * HKK)
+    HKSQ4 = HKSQ / 4.
+    COLLIF = COI * DENK
+    PRESS = DENN[K] * GHK
+    G2H = G2 * GRADH[K]
+    GIH = 1. + G2H
+    FRQ = FREQ - VNXO[K] * WVNX - VNYO[K] * WVNY
+    FRTIM = FRQ * TIME * 3600.
+    TDEL0 = WVNX / (FRQ * 3600.)
+    PSIO = -Y * WVNY + FRTIM
+    FRQSQ = FRQ ** 2
+    WGH = FRQ / GHK
+    F1 = H * COLLIF
+    F2 = FRQ - F1
+    F3 = FRQ - F1 * SINISQ
+    PRESQ = 1. / np.sqrt(PRESS)
+    THERMK = -H * THERMC * (TK ** 2.5) ./ ((TK + 245.4) * PRESS * FRQ)
+    THERM2 = 2. * THERMK
+    Z1 = WVNX * COLLIF * CSINI / F3
+    C1 = WGH - WVNXSQ / F3 - WVNYSQ / F2
+    C2 = G2 + WVNSQ * THERMK
+    C3 = FRQ * F2 / F3
+    W2GH = FRQ * WGH
+    GKWH = WVNSQ * HKSQ / W2GH
+    Z4 = HK12 / HKK - W2GH + WVNSQ
+    Z6 = C2 + THERMK * HKSQ4
+
+    if TIME == TINT:
+        if K <= 1:
+            WVNZ = - np.sqrt(np.complex(-WVNSQ - HKSQ4 + W2GH / GAMMA + GKWH / G2, 0.))
+            WVNT = WVNZ.copy()
+        BB = C2 + THERMK * Z4
+        CC = Z6 * (HKSQ4 + WVNSQ - W2GH) + G2H * (HKI2 / HKK - GKWH + H * WVNT / HKK) - GKWH + W2GH
+        WVNT = - np.sqrt((-BB + np.sqrt(BB ** 2 - 4.* CC * THERMK)) / THERM2)
+    WVNZTI[K] = np.imag(WVNT)
+    WVNZTR[K] = np.real(WVNT)
+    else:
+        WVNZ = WVNZR[K] + H * WVNZI[K]
+    Z5 = HKSQ4 - Z1 ** 2 - C1 * C3 - 2. * H * Z1 * WVNT
+    BB = C2 + THERMK * (Z5 + HKSQ4)
+    CC = Z6 * Z5 + G2H * (Z1 - HKI2 + H * WVNZ) / HKK + G1H * C1 * HKSQ / WGH - HKSQ + WGH * C3
+    WVNZ = - np.sqrt((-BB + np.sqrt(BB ** 2 - 4. * CC * THERMK)) / THERM2)
+    WVNZR[K] = np.real(WVNZ)
+    WVNZI[K] = np.imag(WVNZ)
+    PSIO = PSIO - WVNZ * HNSCM
+    PSIK = PSIO - WVNX * X[K]
+    Z2 = (WVNZ * WVNZ + HKSQ4) * THERMK
+    Z3 = WVNZ - H * (HKI2 + Z1)
+    C4 = FRQSQ * G1 * PRESQ
+    PPK = C4 * (Z3 * (G2 + Z2) + H * G1H / HKK)
+    PZK = C4 * (C1 * GHK * (C2 + Z2) - FRQ)
+    PTK = C4 * (H * C1 * G * G1H / FRQ + Z3)
+    PNK = PPK - PTK
+    PXK = (WVNX * GHK * PPK + COLLIF * CSINI * PZK) / F3
+    TDELAY[K] = TDELO * X[K]
+    FACT5 = AMPL * np.exp( H * PSIK)
+    AMPGW[K] = .1 + np.real(FACT5 * PNK)
+    PZ[K] = PZ[K] + COSI * np.real(FACT5 * PXK) + SINI * np.real(FACT5 * PZK)
+    PX[K] = PX[K] / AMPGW[K]
+    PT[K] = PT[K] * (1. + np.real(FACT5 * PTK))
+    if K != 1:
+        PN[K - 1] = (PT[K] - PT[K - 1]) / HNSCM
+    if IS == 10:
+        EFLUX[K] = .5 * PRESS * np.real(PZK * FACT5 * np.conj(PPK * FACT5))
+        AMPLG[K] = np.abs(FACT5) * PRESQ
+        AMPLHF = AMPLHF + HNSCM * WVNZTI[K]
+        AMPLH[K] = AMPL * np.exp(AMPLHF) * PRESQ
+
+    PN[JJ] = PN[J]    
+
+    #      Kzz   P,    W,   T,   R,   U, 
+    return WVNZ, PPK, PZK, PTK, PNK, PXK
+    
+
+def first_try():
     time = dt.datetime(2010, 1, 1)
 
     # Coordinates in cm
@@ -249,145 +420,6 @@ def plot_Kz_quantities(alts, C, V, omega, omega_a, omega_h, omega_B):
     ax.set_xlabel(r'frequency (Hz)')
 
     plt.show()
-
-
-def facalg(AMPL, ):
-    """
-    See page 110 of Clark thesis - calculates Kz
-    # Translation from the outside world
-    PSI: THERMK
-    lambda_0: THERMC
-
-    """
-    # "DATA"
-    H = i
-    COI = 0.84992E-9
-    RAD = 57.296
-    GAMMA = 1.4
-    
-
-    # pythonized version of Fortran
-    if AMPL < 0:
-        AMPL = AMPL0
-        G1 = GAMMA - 1.
-        G2 = GAMMA / G1
-        #IS = 0
-        WVN = WVN * HCON  
-        HNSCM = HNSTEP / HCON
-        DELTIM = PERIOD / 1200.
-        SINISQ = SINI ** 2
-        CSINI = COSI * SINI
-        WVNSQ = WVN ** 2
-        PHI = PHI / RAD
-        WVNX = WVN * np.cos(PHI)
-        WVNXSQ = WVNX ** 2
-        WVNY = WVN * sin(PHI)
-        WVNYSQ = WVNSQ - WVNXSQ
-        FREQ = .104718 / PERIOD  # 2 pi factor 
-    AMLPHF = 0.
-    #IS += 1 
-    #JJ = J + 1
-    #DO 3 K = 1, JJ 
-    G = GC[K]
-    HKK = HK[K] / HCON
-    GHK = G * HKK
-    DENK = DEN[K]
-    TK = TEMP[K]
-    HK12 = 0.5 / HKK
-    FKSQ = 1 ./ (HKK * HKK)
-    HKSQ4 = HKSQ / 4.
-    COLLIF = COI * DENK
-    PRESS = DENN[K] * GHK
-    G2H = G2 * GRADH[K]
-    GIH = 1. + G2H
-    FRQ = FREQ - VNXO[K] * WVNX - VNYO[K] * WVNY
-    FRTIM = FRQ * TIME * 3600.
-    TDEL0 = WVNX / (FRQ * 3600.)
-    PSIO = -Y * WVNY + FRTIM
-    FRQSQ = FRQ ** 2
-    WGH = FRQ / GHK
-    F1 = H * COLLIF
-    F2 = FRQ - F1
-    F3 = FRQ - F1 * SINISQ
-    PRESQ = 1. / np.sqrt(PRESS)
-    THERMK = -H * THERMC * (TK ** 2.5) ./ ((TK + 245.4) * PRESS * FRQ)
-    THERM2 = 2. * THERMK
-    Z1 = WVNX * COLLIF * CSINI / F3
-    C1 = WGH - WVNXSQ / F3 - WVNYSQ / F2
-    C2 = G2 + WVNSQ * THERMK
-    C3 = FRQ * F2 / F3
-    W2GH = FRQ * WGH
-    GKWH = WVNSQ * HKSQ / W2GH
-    Z4 = HK12 / HKK - W2GH + WVNSQ
-    Z6 = C2 + THERMK * HKSQ4
-
-    if TIME == TINT:
-        if K <= 1:
-            WVNZ = - np.sqrt(np.complex(-WVNSQ - HKSQ4 + W2GH / GAMMA + GKWH / G2, 0.))
-            WVNT = WVNZ.copy()
-        BB = C2 + THERMK * Z4
-        CC = Z6 * (HKSQ4 + WVNSQ - W2GH) + G2H * (HKI2 / HKK - GKWH + H * WVNT / HKK) - GKWH + W2GH
-        WVNT = - np.sqrt((-BB + np.sqrt(BB ** 2 - 4.* CC * THERMK)) / THERM2)
-    WVNZTI[K] = np.imag(WVNT)
-    WVNZTR[K] = np.real(WVNT)
-    else:
-        WVNZ = WVNZR[K] + H * WVNZI[K]
-    Z5 = HKSQ4 - Z1 ** 2 - C1 * C3 - 2. * H * Z1 * WVNT
-    BB = C2 + THERMK * (Z5 + HKSQ4)
-    CC = Z6 * Z5 + G2H * (Z1 - HKI2 + H * WVNZ) / HKK + G1H * C1 * HKSQ / WGH - HKSQ + WGH * C3
-    WVNZ = - np.sqrt((-BB + np.sqrt(BB ** 2 - 4. * CC * THERMK)) / THERM2)
-    WVNZR[K] = np.real(WVNZ)
-    WVNZI[K] = np.imag(WVNZ)
-    PSIO = PSIO - WVNZ * HNSCM
-    PSIK = PSIO - WVNX * X[K]
-    Z2 = (WVNZ * WVNZ + HKSQ4) * THERMK
-    Z3 = WVNZ - H * (HKI2 + Z1)
-    C4 = FRQSQ * G1 * PRESQ
-    PPK = C4 * (Z3 * (G2 + Z2) + H * G1H / HKK)
-    PZK = C4 * (C1 * GHK * (C2 + Z2) - FRQ)
-    PTK = C4 * (H * C1 * G * G1H / FRQ + Z3)
-    PNK = PPK - PTK
-    PXK = (WVNX * GHK * PPK + COLLIF * CSINI * PZK) / F3
-    TDELAY[K] = TDELO * X[K]
-    FACT5 = AMPL * np.exp( H * PSIK)
-    AMPGW[K] = .1 + np.real(FACT5 * PNK)
-    PZ[K] = PZ[K] + COSI * np.real(FACT5 * PXK) + SINI * np.real(FACT5 * PZK)
-    PX[K] = PX[K] / AMPGW[K]
-    PT[K] = PT[K] * (1. + np.real(FACT5 * PTK))
-    if K != 1:
-        PN[K - 1] = (PT[K] - PT[K - 1]) / HNSCM
-    if IS == 10:
-        EFLUX[K] = .5 * PRESS * np.real(PZK * FACT5 * np.conj(PPK * FACT5))
-        AMPLG[K] = np.abs(FACT5) * PRESQ
-        AMPLHF = AMPLHF + HNSCM * WVNZTI[K]
-        AMPLH[K] = AMPL * np.exp(AMPLHF) * PRESQ
-
-    PN[JJ] = PN[J]    
-    
-
-
-
-
-
-
-
-
-
-
- 
-
-    FRQ = omega - v_nx0 * kx - v_ny0 * ky
-    THERMK = -i * THERMC * (T_0 ** 2.5) / ((T_0 + 245.4) * p * FRQ)  
-
-    WGH = omega_p / (g * H)
-    C1 = WGH - WVNXSQ / F3 - WVNYSQ / F2
-    C2 = G2 + WVNSQ * PSI
-    C3 = FRQ * F2 / F3
-
-
-    PSI = THERMK
-
-    return v, omega_p, PSI, k1, c1, c2, c3
 
 
 def clark_consts(lambda_0, T_0, H, omega, k, kx, ky, v_nx0, v_ny0, v_in, \
