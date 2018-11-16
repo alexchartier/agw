@@ -47,6 +47,40 @@ DEN120 = 0.2461E-10  # g/cm3 at 120 km
 
 HCON = 1E-5
 def main():
+
+    # Initialize variables
+
+    # For zprofl
+    ALT = np.zeros(300)
+    GC = np.zeros(300)
+    TEMP = np.zeros(300)
+    WM = np.zeros(300)
+    VNX0 = np.zeros(300)
+    VNY0 = np.zeros(300)
+    X = np.zeros(300)
+    HK = np.zeros(300)
+    TE = np.zeros(300)
+    TI = np.zeros(300)
+    PT = np.zeros(300)
+    DENN = np.zeros(300)
+    DENO = np.zeros(300)
+    BETAL0 = np.zeros(300)
+    PX = np.zeros(300)
+    PZ = np.zeros(300)
+    PN = np.zeros(300)
+    GRADH = np.zeros(300)
+    GRADHI = np.zeros(300)
+    DEN = np.zeros(300)
+
+    # For cofcal
+    A = np.zeros(300)
+    B = np.zeros(300)
+    C = np.zeros(300)
+    QP = np.zeros(300)
+    BETA = np.zeros(300)
+    COLF = np.zeros(300)
+    AMPGW = np.zeros(300)
+
     # Punchcard inputs
     HNSTEP = 2.0  # height step (km)
     DELTME = 0.5  # time increment (hours)
@@ -78,13 +112,12 @@ def main():
 
     # Compute general program constants
     ALITRN = 300.
-    DENIZ0 = 0.2461E-10
     HCON = 1E-5
     DIP = np.deg2rad(DIP)
     BCO = BC / .2656E-22
     SINI = np.sin(DIP)
     COSI = np.cos(DIP)
-    AJ = (HL - 120.) / HNSTEP + 1.
+    AJ = (HL - 120.) / HNSTEP #  (HL - 120.) / HNSTEP + 1.
     J = int(AJ)
     VOB = 0.
     IPRT= 0
@@ -100,16 +133,29 @@ def main():
             TIME = TERM + DELTIM
             # Read AMPLO, THERMC, WVN, PERIOD, PHI, TINT, TERM
         if TERM <= 98:
-            ALT, GC, TEMP, WM, VNX0, VNY0, X, HK, TE, TI, PT, DENN, DENO, BETAL0, PX, PZ, PN, GRADH = \
-                    zprofl(RLATR, DECLR, FLUX, CONTV, TIME, TXMIN, TXMAX, T120, TEEMIN, TEEMAX, HNSTEP, COSI, SINI, \
-                            QPO, ALITRN, ALPHA, BETA0, II, J)
-            cofcal(1, HNSTEP, DELTIM, BCO, PX, PT, PN, PZ, GC, CHAP, ALT, SINI, COSI, COLF, AMPGW, DEN, BETAL0, ALPHA)
-            tridia()
+            ALT, GC, TEMP, WM, VNX0, VNY0, X, HK, TE, TI, PT, VLB,\
+                DENN, DENO, BETAL0, PX, PZ, PN, GRADH, GRADHI, DEN, CHAP\
+                = zprofl(
+                ALT, GC, TEMP, WM, VNX0, VNY0, X, HK, TE, TI, PT,
+                DENN, DENO, BETAL0, PX, PZ, PN, GRADH, GRADHI, DEN,
+                RLATR, DECLR, FLUX, CONTV, TIME, TXMIN, TXMAX, T120,
+                TEEMIN, TEEMAX, HNSTEP, COSI, SINI, QPO, ALITRN, 
+                ALPHA, BETA0, II, J,\
+            )
+            
+            A, B, C, QP, BETA, D, E, COLF, AMPGW = cofcal(
+                A, B, C, QP, BETA, 1, HNSTEP, DELTIM, BCO, PX, PT, PN, PZ, GC,
+                CHAP, ALT, SINI, COSI, COLF, AMPGW, DEN, BETAL0, ALPHA, J
+            )
+            V = tridia(HNSTEP, J, A, B, C, D, QP, BETA, VLB, VOB)
             for K in range(J):
                 DEN[K] = V[K]
             DEN[J + 1] = DEN[J]
             if TIME >= TINT:
-                WVNZ, PPK, PZK, PTK, PNK, PXK = facalg(AMPL, AMPLO, GAMMA, WVN, HNSTEP, PERIOD, SINI, COSI, PHI, IS)
+                WVNZI, WVNZR, PPK, PZK, PTK, PNK, PXK = facalg(
+                    AMPL, AMPLO, GAMMA, WVN, HNSTEP, PERIOD, SINI, COSI, PHI, J, GC, HK,
+                    DEN, TEMP, DENN, GRADH, VNX0, VNY0, TIME, X, Y, THERMC, TINT, PX, PZ, PT,
+                )
                 if TIME == TINT:
                     sort(TINT)
                 else: # (TIME > TINT)
@@ -120,30 +166,16 @@ def main():
 
 # Define relevant functions
 
-def zprofl(RLATR, DECLR, FLUX, CONTV, TIME, TXMIN, TXMAX, T120, TEEMIN, TEEMAX, HNSTEP, \
-        COSI, SINI, QPO, ALITRN, ALPHA, BETA0, II, J):
-    ALT = np.zeros(300)
-    GC = np.zeros(300)
-    TEMP = np.zeros(300)
-    WM = np.zeros(300)
-    VNX0 = np.zeros(300)
-    VNY0 = np.zeros(300)
-    X = np.zeros(300)
-    HK = np.zeros(300)
-    TE = np.zeros(300)
-    TI = np.zeros(300)
-    PT = np.zeros(300)
-    DENN = np.zeros(300)
-    DENO = np.zeros(300)
-    BETAL0 = np.zeros(300)
-    PX = np.zeros(300)
-    PZ = np.zeros(300)
-    PN = np.zeros(300)
-    GRADH = np.zeros(300)
-    GRADHI = np.zeros(300)
-    DEN = np.zeros(300)
+def zprofl(
+        ALT, GC, TEMP, WM, VNX0, VNY0, X, HK, TE, TI, PT,
+        DENN, DENO, BETAL0, PX, PZ, PN, GRADH, GRADHI, DEN,
+        RLATR, DECLR, FLUX, CONTV, TIME, TXMIN, TXMAX, T120,
+        TEEMIN, TEEMAX, HNSTEP, COSI, SINI, QPO, ALITRN, 
+        ALPHA, BETA0, II, J,\
+):
 
-    CHI = np.arccos(np.sin(RLATR) * np.sin(DECLR) + np.cos(RLATR) * np.cos(DECLR) * np.cos((TIME - 112.) * 15 / 57.296))
+    CHI = np.arccos(np.sin(RLATR) * np.sin(DECLR) + np.cos(RLATR) \
+            * np.cos(DECLR) * np.cos((TIME - 112.) * 15 / 57.296))
     TCOSC = (np.cos((CHI - .7854 + 0.20944 * np.sin(CHI + 0.7854)) * 0.5)) ** 2.5
     TEMPEX = TXMIN + (TXMAX - TXMIN) * TCOSC
     TEEX = TEEMIN + (TEEMAX - TEEMIN) * TCOSC
@@ -153,7 +185,8 @@ def zprofl(RLATR, DECLR, FLUX, CONTV, TIME, TXMIN, TXMAX, T120, TEEMIN, TEEMAX, 
     if II == 0:
         X[0] = 0.
         XSTEP = HNSTEP * COSI / (SINI * HCON)
-        CHZ = np.arccos(np.sin(RLATR) * np.sin(DECLR) + np.cos(RLATR) * np.cos(DECLR) * np.cos((19.112) * 15. / 57.296))
+        CHZ = np.arccos(np.sin(RLATR) * np.sin(DECLR) + np.cos(RLATR) \
+                * np.cos(DECLR) * np.cos((19.112) * 15. / 57.296))
         TCOSZ = (np.cos((CHZ - 0.7854 + .20944 * np.sin(CHZ + 0.7854)) * .5)) ** 2.5
         TCFAC = TCOSC - TCOSZ
         PHOFLU = 6.8E8 * QPO
@@ -195,35 +228,35 @@ def zprofl(RLATR, DECLR, FLUX, CONTV, TIME, TXMIN, TXMAX, T120, TEEMIN, TEEMAX, 
             PN[K - 1] = (PT[K] - PT[K - 1]) * HCON / HNSTEP
             BETAL0[K] = BETAL0[K - 1] * np.exp(-HNSTEP / HN2)
             GRADH[K - 1] = (HK[K] / HK[K - 1] - 1.) / HNSTEP
-            DENN[K] = DENN[K - 1] * np.exp(-HNSTEP / HK[K] - GRADH[K - 1]) * TEMP[K - 1] / TEMP[K]
+            DENN[K] = DENN[K - 1] * np.exp(-HNSTEP / HK[K] - GRADH[K - 1]) \
+                        * TEMP[K - 1] / TEMP[K]
             DENO[K] = DENO[K - 1] * np.exp(-HNSTEP / HO) * TEMP[K - 1] / TEMP[K]
         COLFN = 1.565E15 * DENN[K] / (WM[K] ** 1.5)
         PX[K] = SINI / COLFN
         PZ[K] = VNX0[K] * COSI
         if (II != 0) and (DEN[K] >= CONT):
             CONT = DEN[K]  # DEN: ion density
-        pdb.set_trace()
-        CHAP = produc(7.6E10, 4E11, TXMIN, 355., 28, 2.5, 0., 0., CHI, 1.3805E-16, \
-                2.6512E-23, 3.6829E-23, GC[19], 6356.77, 120., HNSTEP, JJ, DENO, \
-                17.32E-18, 14.1E-18, PHOFLU)
-        if II == 0:
-            for K in range(JJ):
-                DEN[K] = np.sqrt(CHAP[K] / ALPHA)
-        PN[JJ] = PN[J]
-        GRADHI[JJ] = GRADH[J]
-        # VLB is flux out of the ionosphere at height HL (order 1E8 cm-2 s-1)
-        VLB = FLUX * CONT * (TCOSC - TCOSZ) / (TCFAC * CONTV)  
-        print('VLB (ion flux out of the top %2.2E' % VLB)
+    CHAP = produc(7.6E10, 4E11, TXMIN, 355., 28, 2.5, 0., 0., CHI, 1.3805E-16, \
+            2.6512E-23, 3.6829E-23, GC[19], 6356.77, 120., HNSTEP, JJ, DENO, \
+            17.32E-18, 14.1E-18, PHOFLU)
+    if II == 0:
+        for K in range(JJ):
+            DEN[K] = np.sqrt(CHAP[K] / ALPHA)
+    PN[JJ] = PN[J]
+    GRADHI[JJ] = GRADH[J]
+    # VLB is flux out of the ionosphere at height HL (order 1E8 cm-2 s-1)
+    VLB = FLUX * CONT * (TCOSC - TCOSZ) / (TCFAC * CONTV)  
+    print('VLB (ion flux out of the top %2.2E' % VLB)
 
-    return ALT, GC, TEMP, WM, VNX0, VNY0, X, HK, TE, TI, PT, DENN, DENO, BETAL0, PX, PZ, PN, GRADH, CHAP
+    return  ALT, GC, TEMP, WM, VNX0, VNY0, X, HK, TE, TI, PT, VLB,\
+            DENN, DENO, BETAL0, PX, PZ, PN, GRADH, GRADHI, DEN, CHAP
+
             
         
-def cofcal(IMPL, HNSTEP, DELTIM, BCO, PX, PT, PN, PZ, GC, CHAP, ALT, SINI, COSI, COLF, AMPGW, DEN, BETAL0, ALPHA):
-    A = np.zeros(300)
-    B = np.zeros(300)
-    C = np.zeros(300)
-    QP = np.zeros(300)
-    BETA = np.zeros(300)
+def cofcal(
+        A, B, C, QP, BETA, IMPL, HNSTEP, DELTIM, BCO, PX, PT, PN, PZ, GC,
+        CHAP, ALT, SINI, COSI, COLF, AMPGW, DEN, BETAL0, ALPHA, J,
+):
 
     HNSTPG = HNSTEP / HCON
     HTRAN = 200.
@@ -257,9 +290,14 @@ def cofcal(IMPL, HNSTEP, DELTIM, BCO, PX, PT, PN, PZ, GC, CHAP, ALT, SINI, COSI,
     D = -A[J]
     E = - SC * SINI
 
+    return A, B, C, QP, BETA, D, E, COLF, AMPGW
+
 
             
-def facalg(AMPL, AMPLO, GAMMA, WVN, HNSTEP, PERIOD, SINI, COSI, PHI, IS):
+def facalg(
+        AMPL, AMPLO, GAMMA, WVN, HNSTEP, PERIOD, SINI, COSI, PHI, J, GC, HK,
+        DEN, TEMP, DENN, GRADH, VNX0, VNY0, TIME, X, Y, THERMC, TINT, PX, PZ, PT,
+):
     """
     See page 110 of Clark thesis - calculates Kz
     # Translation from the outside world
@@ -267,8 +305,17 @@ def facalg(AMPL, AMPLO, GAMMA, WVN, HNSTEP, PERIOD, SINI, COSI, PHI, IS):
     lambda_0: THERMC
 
     """ 
-    if AMPL < 0:
-        AMPL = AMPL0
+    IS = 0  # NOTE: not sure this is right
+    WVNZTI = np.zeros(300)
+    WVNZTR = np.zeros(300)
+    WVNZI = np.zeros(300)
+    WVNZR = np.zeros(300)
+    TDELAY = np.zeros(300) 
+    AMPGW = np.zeros(300) 
+    PN = np.zeros(300) 
+
+    if AMPL <= 0:
+        AMPL = AMPLO
         G1 = GAMMA - 1.
         G2 = GAMMA / G1
         IS = 0
@@ -281,7 +328,7 @@ def facalg(AMPL, AMPLO, GAMMA, WVN, HNSTEP, PERIOD, SINI, COSI, PHI, IS):
         PHI = np.deg2rad(PHI)
         WVNX = WVN * np.cos(PHI)
         WVNXSQ = WVNX ** 2
-        WVNY = WVN * sin(PHI)
+        WVNY = WVN * np.sin(PHI)
         WVNYSQ = WVNSQ - WVNXSQ
         FREQ = .104718 / PERIOD  # 2 pi factor 
     AMLPHF = 0.
@@ -294,13 +341,13 @@ def facalg(AMPL, AMPLO, GAMMA, WVN, HNSTEP, PERIOD, SINI, COSI, PHI, IS):
         DENK = DEN[K]
         TK = TEMP[K]
         HK12 = 0.5 / HKK
-        FKSQ = 1 / (HKK * HKK)
+        HKSQ = 1. / (HKK * HKK)
         HKSQ4 = HKSQ / 4.
         COLLIF = COI * DENK
         PRESS = DENN[K] * GHK
         G2H = G2 * GRADH[K]
-        GIH = 1. + G2H
-        FRQ = FREQ - VNXO[K] * WVNX - VNYO[K] * WVNY
+        G1H = 1. + G2H
+        FRQ = FREQ - VNX0[K] * WVNX - VNY0[K] * WVNY
         FRTIM = FRQ * TIME * 3600.
         TDEL0 = WVNX / (FRQ * 3600.)
         PSIO = -Y * WVNY + FRTIM
@@ -323,33 +370,44 @@ def facalg(AMPL, AMPLO, GAMMA, WVN, HNSTEP, PERIOD, SINI, COSI, PHI, IS):
 
         if TIME == TINT:
             if K <= 1:
-                WVNZ = - np.sqrt(np.complex(-WVNSQ - HKSQ4 + W2GH / GAMMA + GKWH / G2, 0.))
+                WVNZ = - np.sqrt(np.complex(-WVNSQ - HKSQ4 + W2GH \
+                    / GAMMA + GKWH / G2, 0.))
                 WVNT = WVNZ.copy()
             BB = C2 + THERMK * Z4
-            CC = Z6 * (HKSQ4 + WVNSQ - W2GH) + G2H * (HKI2 / HKK - GKWH + H * WVNT / HKK) - GKWH + W2GH
+            CC = Z6 * (HKSQ4 + WVNSQ - W2GH) + G2H \
+                * (HK12 / HKK - GKWH + H * WVNT / HKK) - GKWH + W2GH
             WVNT = - np.sqrt((-BB + np.sqrt(BB ** 2 - 4.* CC * THERMK)) / THERM2)
+            CC = Z6 * (HKSQ4 + WVNSQ - W2GH) + G2H \
+                * (HK12 / HKK - GKWH + H * WVNT / HKK) - GKWH + W2GH
+            WVNT = - np.sqrt((-BB + np.sqrt(BB ** 2 - 4.* CC * THERMK)) / THERM2)
+            Z5 = HKSQ4 - Z1 ** 2 - C1 * C3 - 2. * H * Z1 * WVNT
+            BB = C2 + THERMK * (Z5 + HKSQ4)
+            CC = Z6 * Z5 + G2H * (Z1 - HK12 + H * WVNT) / HKK + G1H* C1 * HKSQ / WGH - HKSQ + WGH * C3
+            WVNZ = - np.sqrt((-BB + np.sqrt(BB ** 2 - 4. * CC * THERMK)) / THERM2)
             WVNZTI[K] = np.imag(WVNT)
             WVNZTR[K] = np.real(WVNT)
         else:
             WVNZ = WVNZR[K] + H * WVNZI[K]
         Z5 = HKSQ4 - Z1 ** 2 - C1 * C3 - 2. * H * Z1 * WVNT
         BB = C2 + THERMK * (Z5 + HKSQ4)
-        CC = Z6 * Z5 + G2H * (Z1 - HKI2 + H * WVNZ) / HKK + G1H * C1 * HKSQ / WGH - HKSQ + WGH * C3
+        CC = Z6 * Z5 + G2H * (Z1 - HK12 + H * WVNZ) / HKK \
+            + G1H * C1 * HKSQ / WGH - HKSQ + WGH * C3
         WVNZ = - np.sqrt((-BB + np.sqrt(BB ** 2 - 4. * CC * THERMK)) / THERM2)
         WVNZR[K] = np.real(WVNZ)
         WVNZI[K] = np.imag(WVNZ)
+        pdb.set_trace()
         PSIO = PSIO - WVNZ * HNSCM
         PSIK = PSIO - WVNX * X[K]
         Z2 = (WVNZ * WVNZ + HKSQ4) * THERMK
-        Z3 = WVNZ - H * (HKI2 + Z1)
+        Z3 = WVNZ - H * (HK12 + Z1)
         C4 = FRQSQ * G1 * PRESQ
         PPK = C4 * (Z3 * (G2 + Z2) + H * G1H / HKK)
         PZK = C4 * (C1 * GHK * (C2 + Z2) - FRQ)
         PTK = C4 * (H * C1 * G * G1H / FRQ + Z3)
         PNK = PPK - PTK
         PXK = (WVNX * GHK * PPK + COLLIF * CSINI * PZK) / F3
-        TDELAY[K] = TDELO * X[K]
-        FACT5 = AMPL * np.exp( H * PSIK)
+        TDELAY[K] = TDEL0 * X[K]
+        FACT5 = AMPL * np.exp(H * PSIK)
         AMPGW[K] = .1 + np.real(FACT5 * PNK)
         PZ[K] = PZ[K] + COSI * np.real(FACT5 * PXK) + SINI * np.real(FACT5 * PZK)
         PX[K] = PX[K] / AMPGW[K]
@@ -365,20 +423,24 @@ def facalg(AMPL, AMPLO, GAMMA, WVN, HNSTEP, PERIOD, SINI, COSI, PHI, IS):
     PN[JJ] = PN[J]    
 
     #      Kzz   P,    W,   T,   R,   U, 
-    return WVNZ, PPK, PZK, PTK, PNK, PXK
+    return WVNZI, WVNZR, PPK, PZK, PTK, PNK, PXK
 
 
-def produc(DENOO, DENN2O, TNO, TNL, XRJ, XNJ, ALPHAO, \
-        ALPHAN, CHI, BC, XOM, XN2M, G, RE, HO, DELHN, N, DENO, ABO, ABN2, PHOFLU):
+def produc(
+        DENOO, DENN2O, TNO, TNL, XRJ, XNJ, ALPHAO, ALPHAN, CHI, BC, XOM, XN2M,
+         G, RE, HO, DELHN, N, DENO, ABO, ABN2, PHOFLU
+):
     PROD = np.zeros(300)
     if CHI - 1.98 < 0:
-        CHAPM1, CHAPM2, HNUK, ALP, ALPH = chapmn(CHI, XOM, G, TNO, TNL, XRJ, XNJ, ALPHAO)
+        CHAPM1, CHAPM2, HNUK, ALP, ALPH = \
+            chapmn(CHI, XOM, G, TNO, TNL, XRJ, XNJ, ALPHAO)
         B = DENOO * (TNL ** ALPH)
         DEPO1 = B * CHAPM1
         DEPO2 = B * CHAPM2
         HNUKO = HNUK
         ALPO = ALP
-        CHAPM1, CHAPM2, HNUK, ALP, ALPH = chapmn(CHI, XN2M, G, TNO, TNL, XRJ, XNJ, ALPHAN)
+        CHAPM1, CHAPM2, HNUK, ALP, ALPH = \
+            chapmn(CHI, XN2M, G, TNO, TNL, XRJ, XNJ, ALPHAN)
         C = DENN2O * (TNL ** ALPH)
         DEPN1 = C * CHAPM1
         DEPN2 = C * CHAPM2
@@ -391,11 +453,13 @@ def produc(DENOO, DENN2O, TNO, TNL, XRJ, XNJ, ALPHAO, \
             ALTD = YI * DELHN
             P = (ALTO + ALTD) * A
             if ((CHI - 1.5688) <= 0) and ((P - ALTO) > 0):
-                DEPTHO = (DEPO1 * np.exp(-ALTD / HNUKO) + DEPO2 * np.exp(-ALPO * ALTD / HNUKO)) * P * ABO / HCON
-                DEPTHN = (DEPN1 * np.exp(-ALTD / HNUKN) + DEPN2 * np.exp(-ALPN * ALTD / HNUKN)) * P * ABN2 / HCON
+                DEPTHO = (DEPO1 * np.exp(-ALTD / HNUKO) + DEPO2 \
+                    * np.exp(-ALPO * ALTD / HNUKO)) * P * ABO / HCON
+                DEPTHN = (DEPN1 * np.exp(-ALTD / HNUKN) + DEPN2 \
+                    * np.exp(-ALPN * ALTD / HNUKN)) * P * ABN2 / HCON
                 SUM = DEPTHO + DEPTHN
                 if (SUM - 150) <= 0:
-                    PROD[I] = ABO * PHOFLU * np.exp(-SUM) * DENU[I]
+                    PROD[I] = ABO * PHOFLU * np.exp(-SUM) * DENO[I]
                 else:
                     PROD[I] = 0.
     else:
@@ -413,7 +477,6 @@ def chapmn(CHI, XM, G, TNO, TNL, XRJ, XNJ, ALPHA):
     S = TNU - P
     Y = S / (Q + R * (S ** 2))
     TS = 0.0291 * np.exp(-(Y ** 2) / 2.)
-    pdb.set_trace()
     HNU = (BC * TNU) / (XM * G)
     HNUK = HNU * HCON
     ALP = 1. + TS * HNUK
@@ -460,9 +523,11 @@ def chapmn(CHI, XM, G, TNO, TNL, XRJ, XNJ, ALPHA):
             E2 = D2 * (A / A2 - 1.)
             E3 = D3 * (A / A3 - 1.)
             GI12 = (TNU2 ** (-ALPH2)) * np.exp(-E2) / A2 ** 2
-            GI22 = ALPH2 * (TNU2 ** (-ALPH2 - 1.)) * (TNU2 - TNL) * np.exp(-ALP2 * E2) / A2 ** 2
+            GI22 = ALPH2 * (TNU2 ** (-ALPH2 - 1.)) * (TNU2 - TNL) \
+                * np.exp(-ALP2 * E2) / A2 ** 2
             GI13 = (TNU3 ** (-ALPH3)) * np.exp(-E3) / A3 ** 2
-            GI23 = ALPH3 * (TNU3 ** (-ALPH3 - 1.)) * (TNU3 - TNL) * np.exp(-ALP3 * E3) / A3 ** 2
+            GI23 = ALPH3 * (TNU3 ** (-ALPH3 - 1.)) * (TNU3 - TNL) \
+                * np.exp(-ALP3 * E3) / A3 ** 2
             GIFI1 = (GI11 + 4. * GI12 + GI13) * DCHI / 6.
             GIFI2 = (GI21 + 4. * GI22 + GI23) * DCHI / 6.
             TGIFI1 = TGIFI1 + GIFI1
@@ -474,8 +539,55 @@ def chapmn(CHI, XM, G, TNO, TNL, XRJ, XNJ, ALPHA):
     return CHAPM1, CHAPM2, HNUK, ALP, ALPH
 
 
-def tridia(a, b, c, k1=-1, k2=0, k3=1):
-    return np.diag(a, k1) + np.diag(b, k2) + np.diag(c, k3)
+def tridia(HNSTEP, J, A, B, C, D, QP, BETA, VLB, VOB):
+    P = np.zeros(300)
+    Q = np.zeros(300)
+    R = np.zeros(300)
+    S = np.zeros(300)
+    U = np.zeros(300)
+    V = np.zeros(300)
+
+    L = J
+    DELX = HNSTEP / HCON
+    DELXSQ = DELX ** 2
+    TODELX = 2. * DELX
+    for I  in range(L):
+        AC = A[I] / DELXSQ
+        BC = B[I] / TODELX
+        P[I] = AC - BC
+        Q[I] = C[I] - BETA[I] - 2. * AC
+        R[I] = AC + BC
+        if I == L:
+            P[I] = P[I] + R[I]
+            Q[I] = Q[I] - ((TODELX * E * R[I]) / D)
+            R[I] = (TODELX * R[I]) / D
+    GLB = -QP[L] - R[L] * VLB
+    GOB = -QP[0] - P[0] * VOB
+    # Calculation of off-diagonal elements of U matrix and elements of S
+    for I in range(L):
+        if (I - 1) == 0:
+            UNUM = R[I]
+            DEM = Q[I]
+            SNUM = GOB
+        elif (I - L) == 0:
+            UNUM = 0.
+            DEM = Q[I] - P[I] * U[I - 1]
+            SNUM = GLB - P[I] * S[I - 1]
+        else:
+            UNUM = R[I]
+            DEM = Q[I] - P[I] * U[I - 1]
+            SNUM = -QP[I] - P[I] * S[I - 1]
+        S[I] = SNUM / DEM
+        U[I] = UNUM / DEM
+    # Solution for the canonical matrix equation for V[N]
+    V[L] = S[L]
+    L = L - 1
+    N = L
+    for I in range(L):
+        V[N] = S[N] - U[N] * V[N + 1]
+        N = N - 1
+    pdb.set_trace()
+    return V
 
 
 ### End of function definitions ###
