@@ -148,6 +148,7 @@ def main():
                 CHAP, ALT, SINI, COSI, COLF, AMPGW, DEN, BETAL0, ALPHA, J
             )
             V = tridia(HNSTEP, J, A, B, C, D, QP, BETA, VLB, VOB)
+            pdb.set_trace()
             for K in range(J):
                 DEN[K] = V[K]
             DEN[J + 1] = DEN[J]
@@ -250,7 +251,6 @@ def zprofl(
 
     return  ALT, GC, TEMP, WM, VNX0, VNY0, X, HK, TE, TI, PT, VLB,\
             DENN, DENO, BETAL0, PX, PZ, PN, GRADH, GRADHI, DEN, CHAP
-
             
         
 def cofcal(
@@ -287,9 +287,8 @@ def cofcal(
         else:
             BETA[K] = BETAL
         C[K] = C[K] - 1. / DELTIS
-    D = -A[J]
+    D = -A[J - 1]  # NOTE: -A[J] in the text
     E = - SC * SINI
-
     return A, B, C, QP, BETA, D, E, COLF, AMPGW
 
 
@@ -395,7 +394,6 @@ def facalg(
         WVNZ = - np.sqrt((-BB + np.sqrt(BB ** 2 - 4. * CC * THERMK)) / THERM2)
         WVNZR[K] = np.real(WVNZ)
         WVNZI[K] = np.imag(WVNZ)
-        pdb.set_trace()
         PSIO = PSIO - WVNZ * HNSCM
         PSIK = PSIO - WVNX * X[K]
         Z2 = (WVNZ * WVNZ + HKSQ4) * THERMK
@@ -422,6 +420,7 @@ def facalg(
 
     PN[JJ] = PN[J]    
 
+    pdb.set_trace()
     #      Kzz   P,    W,   T,   R,   U, 
     return WVNZI, WVNZR, PPK, PZK, PTK, PNK, PXK
 
@@ -452,23 +451,39 @@ def produc(
             YI = I
             ALTD = YI * DELHN
             P = (ALTO + ALTD) * A
-            if ((CHI - 1.5688) <= 0) and ((P - ALTO) > 0):
+            if ((CHI - 1.5688) <= 0):
                 DEPTHO = (DEPO1 * np.exp(-ALTD / HNUKO) + DEPO2 \
                     * np.exp(-ALPO * ALTD / HNUKO)) * P * ABO / HCON
                 DEPTHN = (DEPN1 * np.exp(-ALTD / HNUKN) + DEPN2 \
                     * np.exp(-ALPN * ALTD / HNUKN)) * P * ABN2 / HCON
                 SUM = DEPTHO + DEPTHN
+                print('DEPTHO: %2.2f, DEPTHN: %2.2f' % (DEPTHO, DEPTHN))
                 if (SUM - 150) <= 0:
                     PROD[I] = ABO * PHOFLU * np.exp(-SUM) * DENO[I]
+                else:
+                    PROD[I] = 0.
+            else:
+                if ((P - ALTO) > 0):
+                    DEPTHO = (DEPO1 * np.exp(-ALTD / HNUKO) + DEPO2 \
+                        * np.exp(-ALPO * ALTD / HNUKO)) * P * ABO / HCON
+                    DEPTHN = (DEPN1 * np.exp(-ALTD / HNUKN) + DEPN2 \
+                        * np.exp(-ALPN * ALTD / HNUKN)) * P * ABN2 / HCON
+                    SUM = DEPTHO + DEPTHN
+                    if (SUM - 150) <= 0:
+                        PROD[I] = ABO * PHOFLU * np.exp(-SUM) * DENO[I]
+                    else:
+                        PROD[I] = 0.
                 else:
                     PROD[I] = 0.
     else:
         for I in range(N):
             PROD[I] = 0.
+    pdb.set_trace()
     return PROD
 
 
 def chapmn(CHI, XM, G, TNO, TNL, XRJ, XNJ, ALPHA):
+    print('Calling Chapman function')
     P = 800.
     Q = 750.
     R = 1.722E-4
@@ -531,7 +546,7 @@ def chapmn(CHI, XM, G, TNO, TNL, XRJ, XNJ, ALPHA):
             GIFI1 = (GI11 + 4. * GI12 + GI13) * DCHI / 6.
             GIFI2 = (GI21 + 4. * GI22 + GI23) * DCHI / 6.
             TGIFI1 = TGIFI1 + GIFI1
-            TCIFI2 = TGIFI2 + GIFI2
+            TGIFI2 = TGIFI2 + GIFI2
             GI11 = GI13
             GI21 = GI23
         CHAPM1 = TGIFI1
@@ -540,6 +555,11 @@ def chapmn(CHI, XM, G, TNO, TNL, XRJ, XNJ, ALPHA):
 
 
 def tridia(HNSTEP, J, A, B, C, D, QP, BETA, VLB, VOB):
+    """
+    QP - ion production rate
+    BETA - ionization attachment coefficient
+    Why is BETA nan? Why is D 0.0?
+    """
     P = np.zeros(300)
     Q = np.zeros(300)
     R = np.zeros(300)
@@ -563,6 +583,7 @@ def tridia(HNSTEP, J, A, B, C, D, QP, BETA, VLB, VOB):
             R[I] = (TODELX * R[I]) / D
     GLB = -QP[L] - R[L] * VLB
     GOB = -QP[0] - P[0] * VOB
+
     # Calculation of off-diagonal elements of U matrix and elements of S
     for I in range(L):
         if (I - 1) == 0:
@@ -579,6 +600,7 @@ def tridia(HNSTEP, J, A, B, C, D, QP, BETA, VLB, VOB):
             SNUM = -QP[I] - P[I] * S[I - 1]
         S[I] = SNUM / DEM
         U[I] = UNUM / DEM
+
     # Solution for the canonical matrix equation for V[N]
     V[L] = S[L]
     L = L - 1
@@ -586,7 +608,6 @@ def tridia(HNSTEP, J, A, B, C, D, QP, BETA, VLB, VOB):
     for I in range(L):
         V[N] = S[N] - U[N] * V[N + 1]
         N = N - 1
-    pdb.set_trace()
     return V
 
 
