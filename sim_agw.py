@@ -202,7 +202,6 @@ def zprofl(RLATR, DECLR, FLUX, CONTV, TIME, TXMIN, TXMAX, T120, TEEMIN, TEEMAX, 
         PZ[K] = VNX0[K] * COSI
         if (II != 0) and (DEN[K] >= CONT):
             CONT = DEN[K]  # DEN: ion density
-        pdb.set_trace()
         CHAP = produc(7.6E10, 4E11, TXMIN, 355., 28, 2.5, 0., 0., CHI, 1.3805E-16, \
                 2.6512E-23, 3.6829E-23, GC[19], 6356.77, 120., HNSTEP, JJ, DENO, \
                 17.32E-18, 14.1E-18, PHOFLU)
@@ -215,6 +214,7 @@ def zprofl(RLATR, DECLR, FLUX, CONTV, TIME, TXMIN, TXMAX, T120, TEEMIN, TEEMAX, 
         VLB = FLUX * CONT * (TCOSC - TCOSZ) / (TCFAC * CONTV)  
         print('VLB (ion flux out of the top %2.2E' % VLB)
 
+    pdb.set_trace()
     return ALT, GC, TEMP, WM, VNX0, VNY0, X, HK, TE, TI, PT, DENN, DENO, BETAL0, PX, PZ, PN, GRADH, CHAP
             
         
