@@ -148,7 +148,6 @@ def main():
                 CHAP, ALT, SINI, COSI, COLF, AMPGW, DEN, BETAL0, ALPHA, J
             )
             V = tridia(HNSTEP, J, A, B, C, D, QP, BETA, VLB, VOB)
-            pdb.set_trace()
             for K in range(J):
                 DEN[K] = V[K]
             DEN[J + 1] = DEN[J]
@@ -157,6 +156,7 @@ def main():
                     AMPL, AMPLO, GAMMA, WVN, HNSTEP, PERIOD, SINI, COSI, PHI, J, GC, HK,
                     DEN, TEMP, DENN, GRADH, VNX0, VNY0, TIME, X, Y, THERMC, TINT, PX, PZ, PT,
                 )
+                pdb.set_trace()
                 if TIME == TINT:
                     sort(TINT)
                 else: # (TIME > TINT)
@@ -420,7 +420,6 @@ def facalg(
 
     PN[JJ] = PN[J]    
 
-    pdb.set_trace()
     #      Kzz   P,    W,   T,   R,   U, 
     return WVNZI, WVNZR, PPK, PZK, PTK, PNK, PXK
 
@@ -478,7 +477,7 @@ def produc(
     else:
         for I in range(N):
             PROD[I] = 0.
-    pdb.set_trace()
+
     return PROD
 
 
