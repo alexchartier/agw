@@ -14,8 +14,7 @@ Outputs: 3D estimate of:
             2. ion velocity, temperature (i and e) and density perturbations
 """
 
-"""
-    old stuff
+#old stuff
 K_B = 1.3805E-16
 N_A = 6.022E23
 R = K_B * N_A
@@ -33,7 +32,6 @@ z = np.linspace(50, 300, 1)
 # TODO(ATC): Check whether x, y, z are defined reasonably
 # TODO(ATC): Check whether kx, ky, kz are calculated or defined
 
-"""
 
 
 # "DATA"
@@ -48,6 +46,7 @@ DEN120 = 0.2461E-10  # g/cm3 at 120 km
 HCON = 1E-5
 def main():
 
+    first_try()
     # Initialize variables
 
     # For zprofl
@@ -156,7 +155,6 @@ def main():
                     AMPL, AMPLO, GAMMA, WVN, HNSTEP, PERIOD, SINI, COSI, PHI, J, GC, HK,
                     DEN, TEMP, DENN, GRADH, VNX0, VNY0, TIME, X, Y, THERMC, TINT, PX, PZ, PT,
                 )
-                pdb.set_trace()
                 if TIME == TINT:
                     sort(TINT)
                 else: # (TIME > TINT)
@@ -289,6 +287,8 @@ def cofcal(
         C[K] = C[K] - 1. / DELTIS
     D = -A[J - 1]  # NOTE: -A[J] in the text
     E = - SC * SINI
+    pdb.set_trace()
+    plt.plot(DENK); plt.show()
     return A, B, C, QP, BETA, D, E, COLF, AMPGW
 
 
@@ -660,14 +660,14 @@ def agw_perts(time, starttime, x, y, z, k, kx, ky, mlat, mlon, period, A):
         v_nx0, v_ny0, v_in, rho_0, rho_i, I, gamma_1, m, p)
     Kz = calc_Kz_clark(PSI, c1, c2, c3, H, H_dot, k1, omega_p, gamma_1)
 
-    plt.plot(np.imag(Kz), alts)
-    plt.show()
     kzr = np.real(Kz)
 
     # Polarization factors
     P = calc_P(omega_p, gamma, gamma_1, p, Kz, H, H_dot, k1, c2, PSI)
     V = calc_V(omega_p, v_in, ky, g, H, P)
     W = calc_W(omega_p, gamma, p, c1, g, H, c2, PSI, Kz)
+    plt.plot(np.imag(W), alts)
+    plt.show()
     U = calc_U(omega_p, v_in, I, kx, g, H, P, W)
 
     # velocity, density and pressure perturbations
