@@ -1,9 +1,6 @@
 import numpy as np
 import pdb 
-from pyglow import pyglow
-import datetime as dt
 import matplotlib.pyplot as plt
-import scipy.interpolate
 
 """
 AGW/TID simulation based Clark (1970) thesis
@@ -83,8 +80,8 @@ def get_clark_Kz():
     WVN = 0.02  # Horizontal wavenumber (km^-1)
     PERIOD = 20 # GW period (min)
     PHI = 90  # azimuth (degrees)
-    TINT = 12.  # Time of start of GW in hours (must be > 12 or the last TERM read, and even multiple of DELTME)
-    TERM = 24.  # Time of GW termination in hours (> TINT and even multiple of DELTME)
+    TINT = 12.  # Time of start of GW in hr (must be > 12 or the last TERM read, and even multiple of DELTME)
+    TERM = 24.  # Time of GW termination in hr (> TINT and even multiple of DELTME)
     # Program stops when TERM > 98.0 
 
     print('FLUX and CONTV not properly defined - continuing with them set to 1')
@@ -133,8 +130,9 @@ def get_clark_Kz():
         DEN[J + 1] = DEN[J]
         if TIME >= TINT:
             WVNZI, WVNZR, PPK, PZK, PTK, PNK, PXK = facalg(
-                AMPL, AMPLO, GAMMA, WVN, HNSTEP, PERIOD, SINI, COSI, PHI, J, GC, HK,
-                DEN, TEMP, DENN, GRADH, VNX0, VNY0, TIME, X, Y, THERMC, TINT, PX, PZ, PT,
+                AMPL, AMPLO, GAMMA, WVN, HNSTEP, PERIOD, SINI, COSI, 
+                PHI, J, GC, HK, DEN, TEMP, DENN, GRADH, VNX0, VNY0, 
+                TIME, X, Y, THERMC, TINT, PX, PZ, PT, ALT,
             )
             """
             if TIME == TINT:
@@ -252,7 +250,7 @@ def cofcal(
         TC = TC1
         SC = SC1
         TC1 = BCO * PX[K + 1] * PT[K + 1]
-        SC1 =                 BCO * PX[K + 1] * PN[K + 1] - PZ[K + 1] + GC[K + 1] * PX[K + 1]
+        SC1 = BCO * PX[K + 1] * PN[K + 1] - PZ[K + 1] + GC[K + 1] * PX[K + 1]
         GRADTC = (TC1 - TC) / HNSTPG
         GRADSC = (SC1 - SC) / HNSTPG
         A[K] = TC * SINI
@@ -277,8 +275,9 @@ def cofcal(
 
             
 def facalg(
-        AMPL, AMPLO, GAMMA, WVN, HNSTEP, PERIOD, SINI, COSI, PHI, J, GC, HK,
-        DEN, TEMP, DENN, GRADH, VNX0, VNY0, TIME, X, Y, THERMC, TINT, PX, PZ, PT,
+        AMPL, AMPLO, GAMMA, WVN, HNSTEP, PERIOD, SINI, COSI, 
+        PHI, J, GC, HK, DEN, TEMP, DENN, GRADH, VNX0, VNY0, 
+        TIME, X, Y, THERMC, TINT, PX, PZ, PT, ALT,
 ):
     """
     See page 110 of Clark thesis - calculates Kz
@@ -345,8 +344,13 @@ def facalg(
         C1 = WGH - WVNXSQ / F3 - WVNYSQ / F2
         C2 = G2 + WVNSQ * THERMK
         C3 = FRQ * F2 / F3
-        print('C1: %2.2E + i %2.2E, C2: %2.2E + i %2.2E, C3: %2.2E + i %2.2E' \
-            % (C1.real, C1.imag, C2.real, C2.imag, C3.real, C3.imag))
+        print('ALT: %i, THERMK: %2.2E' % (ALT[K], THERMK))
+        """
+        print(
+         'ALT: %i, C1: %2.1 + i %2.2E, CCOLLIF2: %2.2E + i %2.2E, C3: %2.2E + i %2.2E' \
+            % (ALT[K], C1.real, C1.imag, C2.real, C2.imag, C3.real, C3.imag)
+        )
+        """
         W2GH = FRQ * WGH
         GKWH = WVNSQ * HKSQ / W2GH
         Z4 = HK12 / HKK - W2GH + WVNSQ
@@ -366,7 +370,8 @@ def facalg(
             WVNT = - np.sqrt((-BB + np.sqrt(BB ** 2 - 4.* CC * THERMK)) / THERM2)
             Z5 = HKSQ4 - Z1 ** 2 - C1 * C3 - 2. * H * Z1 * WVNT
             BB = C2 + THERMK * (Z5 + HKSQ4)
-            CC = Z6 * Z5 + G2H * (Z1 - HK12 + H * WVNT) / HKK + G1H* C1 * HKSQ / WGH - HKSQ + WGH * C3
+            CC = Z6 * Z5 + G2H * (Z1 - HK12 + H * WVNT) / HKK + \
+                    G1H* C1 * HKSQ / WGH - HKSQ + WGH * C3
             WVNZ = - np.sqrt((-BB + np.sqrt(BB ** 2 - 4. * CC * THERMK)) / THERM2)
             WVNZTI[K] = np.imag(WVNT)
             WVNZTR[K] = np.real(WVNT)
@@ -404,6 +409,7 @@ def facalg(
             AMPLH[K] = AMPL * np.exp(AMPLHF) * PRESQ
 
     PN[JJ] = PN[J]    
+    pdb.set_trace()
 
     #      Kzz   P,    W,   T,   R,   U, 
     return WVNZI, WVNZR, PPK, PZK, PTK, PNK, PXK

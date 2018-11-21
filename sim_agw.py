@@ -44,11 +44,11 @@ def main():
     mlon = 10.
     period = 30.    # Period of wave (minutes).
 
-    phi_H = 0.1    # propagation direction (N = 0, S = 180)
+    phi_H = 90.    # propagation direction (N = 0, S = 180)
     A = 5.  # magnitude of wind disturbance at the bottom (m/s)
 
     # Horizontal wavenumbers in cm^-1 
-    k = 0.01 * 1E-5
+    k = 0.02 * 1E-5
     kx = k * np.cos(np.deg2rad(phi_H))
     ky = k * np.sin(np.deg2rad(phi_H))
 
@@ -78,13 +78,13 @@ def agw_perts(time, starttime, x, y, z, k, kx, ky, mlat, mlon, period, A):
     v, omega_p, PSI, k1, c1, c2, c3 = clark_consts(
         lambda_0, T_0, H, omega, k, kx, ky,
         v_nx0, v_ny0, v_in, rho_0, rho_i, I, gamma_1, m, p)
+    pdb.set_trace()
     Kz = calc_Kz_clark(PSI, c1, c2, c3, H, H_dot, k1, omega_p, gamma_1)
     Kzi, Kzr, Alts = clark_fortran.get_clark_Kz()
 
     plt.plot(np.imag(Kz), alts)
     plt.plot(Kzi, Alts)
     plt.show()
-    pdb.set_trace()
     kzr = np.real(Kz)
 
     # Polarization factors
@@ -275,6 +275,7 @@ def clark_consts(lambda_0, T_0, H, omega, k, kx, ky, v_nx0, v_ny0, v_in, \
     """ 
     P_0 = rho_0 * K_B * T_0 / m
     v = v_in * rho_i / rho_0
+    pdb.set_trace()
     omega_p = omega - kx * v_nx0 - ky * v_ny0
 
     FRQ = omega - v_nx0 * kx - v_ny0 * ky
@@ -363,7 +364,10 @@ def get_bkgd_atmosphere(time, z, lat, lon):
         pt = pyglow.Point(time, lat, lon, alt)
         pt.run_msis()
         pt.run_iri()
-        pt.run_hwm()
+        try:
+            pt.run_hwm()
+        except:
+            pt.run_hwm14()
         v_nx.append(pt.u * 1E2)
         v_ny.append(pt.v * 1E2)
         T_0.append(pt.Tn_msis)
