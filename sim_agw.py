@@ -103,6 +103,21 @@ def agw_perts(time, starttime, x, y, z, k, kx, ky, mlat, mlon, period, A):
     return v_n1, p_n1, rho_n1
              
 
+def calc_Kz(Kz0, PSI, k1, c1, c2, c3, H, H_dot, gamma_1, omega_p):
+    def J(Kz2):
+        Kz = np.sqrt(Kz2)
+        cost = PSI * Kz ** 4 - 2 * i * k1 * PSI * Kz ** 3 + \
+            Kz ** 2 * (c2 + PSI * (1 / (2 * H ** 2) - k1 ** 2 - c1 * c3))\
+            + i * Kz (- 2 * k1 * c2 - 2 * k1 * PSI / (4 * H ** 2) + gamma_1 * H_dot / H) \
+            + PSI / (4 * H ** 2) * (1 / (4 * H ** 2) - k1 ** 2 - c1 * c3) + c2 / (4 * H ** 2) \
+            - c1 * c2 * c3 - c2 * k1 ** 2 - 1 / H ** 2 + \
+            omega_p * c3 / (g * H) + c1 * g / (omega_p * H) \
+            + gamma_1 * H_dot / H * (-1 / (2 * H) + k1 + c1 * g / omega_p)
+        return cost ** 2
+    Kz_out2 = scipy.optimize.minimize(J, Kz0 ** 2)
+    return np.sqrt(Kz_out2)
+
+
 def calc_brunt_vaisala_freq(z, gamma, H):
     # Brunt-Vaisala freq: sqrt((gamma - 1) * g ** 2 / C **2)
     # C = sqrt(gamma * g * H)
@@ -218,7 +233,8 @@ def calc_Kz_volland(gamma, omega, omega_B, kx, M, P_0, T, lambda_0, cp, alts, ):
     A = omega_a / omega
     G = omega_h / omega 
     B = 2 * (gamma - 1) ** (1 / 2) / gamma 
-    Kz = (gamma / 2 - A ** 2 - S ** 2 - i * G \
+    Kz = (
+        gamma / 2 - A ** 2 - S ** 2 - i * G \
         - ((gamma / 2 - i * G) ** 2 + 2 * i * G * (1 + B ** 2 * S ** 2)) ** (1 / 2)
         ) ** (1 / 2)
 
