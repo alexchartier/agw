@@ -220,10 +220,11 @@ def zprofl(
 
     CHAP = produc(7.6E10, 4E11, TXMIN, 355., 28, 2.5, 0., 0., CHI, 1.3805E-16, \
             2.6512E-23, 3.6829E-23, GC[19], 6356.77, 120., HNSTEP, JJ, DENO, \
-            17.32E-18, 14.1E-18, PHOFLU)
+            7.32E-18, 14.1E-18, PHOFLU, ALT)
     if II == 0:
         for K in range(JJ):
             DEN[K] = np.sqrt(CHAP[K] / ALPHA)
+    pdb.set_trace()
     PN[JJ] = PN[J]
     GRADHI[JJ] = GRADH[J]
     # VLB is flux out of the ionosphere at height HL (order 1E8 cm-2 s-1)
@@ -344,13 +345,10 @@ def facalg(
         C1 = WGH - WVNXSQ / F3 - WVNYSQ / F2
         C2 = G2 + WVNSQ * THERMK
         C3 = FRQ * F2 / F3
-        print('ALT: %i, THERMK: %2.2E' % (ALT[K], THERMK))
-        """
         print(
-         'ALT: %i, C1: %2.1 + i %2.2E, CCOLLIF2: %2.2E + i %2.2E, C3: %2.2E + i %2.2E' \
-            % (ALT[K], C1.real, C1.imag, C2.real, C2.imag, C3.real, C3.imag)
+            'ALT: %i, COLLIF: %2.2E ' \
+            % (ALT[K], COLLIF)
         )
-        """
         W2GH = FRQ * WGH
         GKWH = WVNSQ * HKSQ / W2GH
         Z4 = HK12 / HKK - W2GH + WVNSQ
@@ -409,7 +407,6 @@ def facalg(
             AMPLH[K] = AMPL * np.exp(AMPLHF) * PRESQ
 
     PN[JJ] = PN[J]    
-    pdb.set_trace()
 
     #      Kzz   P,    W,   T,   R,   U, 
     return WVNZI, WVNZR, PPK, PZK, PTK, PNK, PXK
@@ -417,7 +414,7 @@ def facalg(
 
 def produc(
         DENOO, DENN2O, TNO, TNL, XRJ, XNJ, ALPHAO, ALPHAN, CHI, BC, XOM, XN2M,
-         G, RE, HO, DELHN, N, DENO, ABO, ABN2, PHOFLU
+        G, RE, HO, DELHN, N, DENO, ABO, ABN2, PHOFLU, ALT,
 ):
     PROD = np.zeros(300)
     if CHI - 1.98 < 0:
@@ -447,7 +444,9 @@ def produc(
                 DEPTHN = (DEPN1 * np.exp(-ALTD / HNUKN) + DEPN2 \
                     * np.exp(-ALPN * ALTD / HNUKN)) * P * ABN2 / HCON
                 SUM = DEPTHO + DEPTHN
-                # print('DEPTHO: %2.2f, DEPTHN: %2.2f' % (DEPTHO, DEPTHN))
+                pdb.set_trace()
+                print('ALT: %i, DEPTHO: %2.2f, DEPTHN: %2.2f' \
+                    % (ALT[I], DEPTHO, DEPTHN))
                 if (SUM - 150) <= 0:
                     PROD[I] = ABO * PHOFLU * np.exp(-SUM) * DENO[I]
                 else:

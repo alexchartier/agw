@@ -75,11 +75,17 @@ def agw_perts(time, starttime, x, y, z, k, kx, ky, mlat, mlon, period, A):
     A_p = A * np.exp(i * (omega * t - kx * x - ky * y))  # GW equation
 
     # Various intermediate quantities
-    v, omega_p, PSI, k1, c1, c2, c3 = clark_consts(
+    v, omega_p, PSI, k1, c1, c2, c3, P_0 = clark_consts(
         lambda_0, T_0, H, omega, k, kx, ky,
-        v_nx0, v_ny0, v_in, rho_0, rho_i, I, gamma_1, m, p)
-    pdb.set_trace()
+        v_nx0, v_ny0, v_in, rho_0, rho_i, I, gamma_1, m, p, alts,
+    )
     Kz = calc_Kz_clark(PSI, c1, c2, c3, H, H_dot, k1, omega_p, gamma_1)
+    omega_B = calc_brunt_vaisala_freq(z, gamma, H)
+    pdb.set_trace() 
+    Kzv = calc_Kz_volland(
+            gamma, omega, omega_B, kx, m, P_0, T_0, lambda_0, cp, alts, 
+    )
+    pdb.set_trace()
     Kzi, Kzr, Alts = clark_fortran.get_clark_Kz()
 
     plt.plot(np.imag(Kz), alts)
@@ -111,10 +117,12 @@ def calc_brunt_vaisala_freq(z, gamma, H):
     omega_B = np.sqrt((gamma - 1) * g ** 2 / C ** 2)
     omega_B /= (2 * np.pi)
     alts = z/1E5 + 80
+    """
     plt.plot(1 / (omega_B * 60), alts)
     plt.xlabel('Period (min)')
     plt.ylabel('Alt. (km)')
     plt.show()
+    """
     return omega_B
     
    
@@ -179,6 +187,7 @@ def calc_T(omega_p, gamma, P_0, c1, g, gamma_1, H_dot, Kz, H, K_1):
         (1 + gamma_1 * H_dot) + omega_p * (Kz - i / (2 * H) - i * K_1))
     return T
 
+
 def calc_Kz_clark(PSI, c1, c2, c3, H, H_dot, k1, omega_p, gamma_1):
     """
     Kz following Clark (p. 24-25)
@@ -189,7 +198,6 @@ def calc_Kz_clark(PSI, c1, c2, c3, H, H_dot, k1, omega_p, gamma_1):
         + omega_p * c3 / (g * H) + c1 * g / (omega_p * H) + \
         gamma_1 * H_dot / H * (-1 / (2 * H) + k1 + c1 * g / omega_p))
 
-    pdb.set_trace()
     Kz = (- d1 / 2 - (d1 ** 2 / 2 - 4 * d2) ** (1 / 2)) ** (1 / 2)
 
     return Kz
@@ -259,7 +267,8 @@ def plot_Kz_quantities(alts, C, V, omega, omega_a, omega_h, omega_B):
 
 
 def clark_consts(lambda_0, T_0, H, omega, k, kx, ky, v_nx0, v_ny0, v_in, \
-        rho_0, rho_i, I, gamma_1, m, p):
+        rho_0, rho_i, I, gamma_1, m, p, alts,
+):
     """ 
          Clark, P23
     lambda_0: Unperturbed thermal conductivity coefficient
@@ -275,7 +284,6 @@ def clark_consts(lambda_0, T_0, H, omega, k, kx, ky, v_nx0, v_ny0, v_in, \
     """ 
     P_0 = rho_0 * K_B * T_0 / m
     v = v_in * rho_i / rho_0
-    pdb.set_trace()
     omega_p = omega - kx * v_nx0 - ky * v_ny0
 
     FRQ = omega - v_nx0 * kx - v_ny0 * ky
@@ -286,8 +294,7 @@ def clark_consts(lambda_0, T_0, H, omega, k, kx, ky, v_nx0, v_ny0, v_in, \
          ky ** 2 / (omega_p - i * v)
     c2 = gamma_1 * k ** 2 * PSI
     c3 = omega_p * (omega_p - i * v) / (omega_p - i * v * np.sin(I) ** 2)
-    pdb.set_trace()
-    return v, omega_p, PSI, k1, c1, c2, c3
+    return v, omega_p, PSI, k1, c1, c2, c3, P_0
 
 
 def get_specific_heat_ratios(T_0=500):
